@@ -29,22 +29,33 @@ PUBLIC_HTML = [
 ]
 
 
-def font_file(pattern: str, fallback: str) -> str:
+def font_file(family: str, style: str, fallback: str) -> str:
+    """Usa il font richiesto solo se fc-match conferma davvero quella famiglia."""
     try:
-        found = subprocess.check_output(
-            ["fc-match", "-f", "%{file}", pattern], text=True
+        match = subprocess.check_output(
+            ["fc-match", "-f", "%{family}|%{file}", f"{family}:style={style}"],
+            text=True,
         ).strip()
-        if found and Path(found).exists():
+        matched_family, found = match.split("|", 1)
+        if family.lower() in matched_family.lower() and found and Path(found).exists():
             return found
     except Exception:
         pass
     return fallback
 
 
-LORA = font_file("Lora:style=Regular", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
-LORA_BOLD = font_file("Lora:style=Semibold", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf")
-CARLITO = font_file("Carlito:style=Regular", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
-CARLITO_BOLD = font_file("Carlito:style=Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+SERIF = font_file(
+    "Lora", "Regular", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
+)
+SERIF_BOLD = font_file(
+    "Lora", "Semibold", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+)
+SANS = font_file(
+    "Carlito", "Regular", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+)
+SANS_BOLD = font_file(
+    "Carlito", "Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+)
 
 
 def draw_tracking(draw, xy, text, font, fill, spacing):
@@ -67,38 +78,63 @@ def generate_image():
     image = Image.new("RGB", (width, height), deep)
     draw = ImageDraw.Draw(image)
 
-    # Barra d'accento, coerente con il token --blue-2 del sito.
-    draw.rectangle((0, 0, 14, height), fill=blue)
+    # Barra d'accento verticale, come nel visual approvato.
+    draw.rectangle((0, 0, 20, height), fill=blue)
 
-    # Monogramma GL: cerchio chiaro, bordo sottile, serif come nell'header.
-    cx, cy, r = 105, 105, 43
-    draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=white, outline="#8f989f", width=2)
-    mono_font = ImageFont.truetype(LORA_BOLD, 29)
+    # Monogramma GL, coerente con l'header del sito.
+    cx, cy, r = 151, 154, 51
+    draw.ellipse(
+        (cx - r, cy - r, cx + r, cy + r),
+        fill=white,
+        outline="#8f989f",
+        width=2,
+    )
+    mono_font = ImageFont.truetype(SERIF_BOLD, 31)
     box = draw.textbbox((0, 0), "GL", font=mono_font)
     tw, th = box[2] - box[0], box[3] - box[1]
-    draw.text((cx - tw/2, cy - th/2 - 2), "GL", font=mono_font, fill=deep)
+    draw.text((cx - tw / 2, cy - th / 2 - 3), "GL", font=mono_font, fill=deep)
 
-    name_font = ImageFont.truetype(LORA, 67)
-    label_font = ImageFont.truetype(CARLITO_BOLD, 22)
-    city_font = ImageFont.truetype(CARLITO, 26)
-    domain_font = ImageFont.truetype(CARLITO, 19)
+    name_font = ImageFont.truetype(SERIF, 74)
+    label_font = ImageFont.truetype(SANS_BOLD, 25)
+    city_font = ImageFont.truetype(SANS, 27)
+    domain_font = ImageFont.truetype(SANS, 19)
 
-    draw.text((182, 62), "Giancarlo Lupi", font=name_font, fill=white)
-    draw_tracking(draw, (184, 154), "NEUROCHIRURGO · MD PHD", label_font, pale, 3.2)
+    draw.text((151, 250), "Giancarlo Lupi", font=name_font, fill=white)
+    draw_tracking(
+        draw,
+        (153, 357),
+        "NEUROCHIRURGO · MD PHD",
+        label_font,
+        pale,
+        3.2,
+    )
 
-    # Filetto editoriale.
-    draw.line((76, 276, 1124, 276), fill=rule, width=1)
+    # Filetto editoriale sottile.
+    draw.line((151, 423, 1050, 423), fill=rule, width=1)
 
-    draw_tracking(draw, (78, 335), "PISA · PONSACCO · MASSA", city_font, white, 2.0)
+    draw_tracking(
+        draw,
+        (151, 505),
+        "PISA · PONSACCO · MASSA",
+        city_font,
+        white,
+        1.8,
+    )
 
-    # Firma di dominio discreta in basso a destra.
     domain = "www.giancarlolupi.com"
     db = draw.textbbox((0, 0), domain, font=domain_font)
     dw = db[2] - db[0]
-    draw.text((1122 - dw, 552), domain, font=domain_font, fill=muted)
+    draw.text((1050 - dw, 512), domain, font=domain_font, fill=muted)
 
     ASSET.parent.mkdir(parents=True, exist_ok=True)
-    image.save(ASSET, "JPEG", quality=88, optimize=True, progressive=True, subsampling=2)
+    image.save(
+        ASSET,
+        "JPEG",
+        quality=90,
+        optimize=True,
+        progressive=True,
+        subsampling=2,
+    )
 
 
 def update_og_metadata(text: str) -> str:
@@ -147,8 +183,7 @@ def main():
     generate_image()
     for path in PUBLIC_HTML:
         text = path.read_text(encoding="utf-8")
-        updated = update_og_metadata(text)
-        path.write_text(updated, encoding="utf-8")
+        path.write_text(update_og_metadata(text), encoding="utf-8")
     print(f"Generated {ASSET.relative_to(ROOT)} and updated {len(PUBLIC_HTML)} HTML files")
 
 

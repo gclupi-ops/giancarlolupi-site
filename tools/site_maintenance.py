@@ -33,7 +33,7 @@ FAQS = {
         ("Quanto dura l'intervento e quando si torna a guidare o al lavoro?",
          "Non esiste un numero valido per tutte le procedure. Durata, ricovero e recupero cambiano in base al tipo di intervento, stato neurologico, attività lavorativa e decorso. È più corretto definire intervalli personalizzati dopo aver stabilito la procedura realmente indicata."),
         ("Ha senso chiedere una seconda opinione se mi hanno già proposto un intervento?",
-         "Sì, soprattutto se si vogliono verificare indicazione, alternative o tempi. È utile portare le immagini complete e la proposta già ricevuta."),
+         "Sì, soprattutto se vuoi verificare indicazione, alternative o tempi. È utile portare le immagini complete e la proposta già ricevuta."),
     ],
     "neurochirurgia.html": [
         ("Un meningioma scoperto per caso deve essere sempre operato?",

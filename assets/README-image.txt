@@ -1,0 +1,1 @@
+Image binary is managed separately; this placeholder is not used by the site.

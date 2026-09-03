@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'tools/site_maintenance.py'
+      - 'tools/identity_schema.py'
 
 permissions:
   contents: write
@@ -18,7 +19,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply site maintenance
-        run: python tools/site_maintenance.py
+        run: |
+          python tools/site_maintenance.py
+          python tools/identity_schema.py
       - name: Commit generated changes
         run: |
           if git diff --quiet && [ -z "$(git status --porcelain)" ]; then

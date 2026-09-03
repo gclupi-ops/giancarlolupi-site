@@ -2,9 +2,6 @@ name: Site maintenance
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'tools/update_qsalute_copy.py'
 
 permissions:
   contents: write
@@ -21,7 +18,6 @@ jobs:
         run: |
           python tools/site_maintenance.py
           python tools/identity_schema.py
-          if [ -f tools/update_qsalute_copy.py ]; then python tools/update_qsalute_copy.py; fi
       - name: Commit generated changes
         run: |
           if git diff --quiet && [ -z "$(git status --porcelain)" ]; then

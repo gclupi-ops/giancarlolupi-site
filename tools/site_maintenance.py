@@ -16,8 +16,10 @@ PUBLIC_HTML = [
     ROOT / "neurochirurgia.html",
     ROOT / "medico.html",
     ROOT / "cv-pubblicazioni.html",
+    ROOT / "seconda-opinione.html",
     ROOT / "documentazione-clinica.html",
     ROOT / "approfondimenti.html",
+    ROOT / "rassegna-stampa.html",
     ROOT / "sedi.html",
     ROOT / "privacy.html",
     ROOT / "404.html",
@@ -107,7 +109,6 @@ def normalize_institutional_bylines(text: str) -> str:
 
 
 def normalize_reading_times(text: str) -> str:
-    # Tempi basati sulla lunghezza reale dei tre articoli (circa 200-230 parole/minuto).
     text = text.replace(">8 min<", ">4 min<")
     text = text.replace(">7 min<", ">3 min<")
     text = text.replace(">9 min<", ">4 min<")
@@ -132,7 +133,6 @@ def normalize_profile_image(text: str, path: Path) -> str:
 
 
 def ensure_open_graph(text: str, path: Path) -> str:
-    # Elimina i vecchi tag Open Graph per evitare duplicati e ricostruisce un set uniforme.
     text = re.sub(r'\s*<meta\s+property=["\']og:[^>]+>', "", text, flags=re.I)
     title = get_title(text)
     description = get_description(text)
@@ -185,14 +185,11 @@ def process_public_html(path: Path) -> None:
 for html_path in PUBLIC_HTML:
     process_public_html(html_path)
 
-# JavaScript: soltanto comportamento del menu mobile. I contenuti editoriali/deontologici
-# devono essere presenti nell'HTML e non dipendere dall'esecuzione di JavaScript.
 write(
     ROOT / "assets" / "script.js",
     """const btn = document.querySelector('.menu-btn');\nconst nav = document.querySelector('.navlinks');\n\nif (btn && nav) {\n  btn.addEventListener('click', () => {\n    const open = nav.classList.toggle('open');\n    btn.setAttribute('aria-expanded', open ? 'true' : 'false');\n  });\n}\n""",
 )
 
-# Tipografia cross-platform deliberata e contrasto AA più robusto.
 styles = read(ROOT / "assets" / "styles.css")
 styles = styles.replace("--muted:#6d747a;", "--muted:#5f666c;")
 styles = styles.replace(
@@ -205,11 +202,10 @@ styles = styles.replace(
 )
 write(ROOT / "assets" / "styles.css", styles)
 
-# Redirect fallback: coerenti con i veri 301 Netlify. Non riscrivere MIGRAZIONE-SEO.md.
 legacy_redirects = {
     "cvitae": "/cv-pubblicazioni.html",
     "map": "/sedi.html",
-    "rassegna-stampa": "/approfondimenti.html",
+    "rassegna-stampa": "/rassegna-stampa.html",
     "calendario-appuntamenti": "/documentazione-clinica.html",
 }
 redirect_template = (
@@ -227,15 +223,16 @@ for old, target in legacy_redirects.items():
     target_js = repr(target).replace("'", '"')
     write(directory / "index.html", redirect_template.format(target=target, target_js=target_js))
 
-# Sitemap: lastmod è il segnale temporale utile; changefreq resta solo descrittivo.
 sitemap_items = [
     ("/", "monthly"),
     ("/colonna.html", "monthly"),
     ("/neurochirurgia.html", "monthly"),
     ("/medico.html", "monthly"),
     ("/cv-pubblicazioni.html", "yearly"),
+    ("/seconda-opinione.html", "monthly"),
     ("/documentazione-clinica.html", "yearly"),
     ("/approfondimenti.html", "weekly"),
+    ("/rassegna-stampa.html", "yearly"),
     ("/sedi.html", "monthly"),
     ("/privacy.html", "monthly"),
     ("/approfondimenti/mal-di-schiena-quando-preoccuparsi.html", "weekly"),

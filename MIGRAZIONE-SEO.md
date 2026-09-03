@@ -22,25 +22,28 @@ Netlify viene usato per CDN/HTTPS e per i redirect HTTP definiti nel file `_redi
 | Vecchio URL | Nuovo URL | Stato |
 |---|---|---|
 | `/` | `/` | invariato |
-| `/cvitae` | `/cv-pubblicazioni.html` | 301 |
-| `/cvitae/` | `/cv-pubblicazioni.html` | 301 |
-| `/map` | `/sedi.html` | 301 |
-| `/map/` | `/sedi.html` | 301 |
-| `/rassegna-stampa` | `/rassegna-stampa.html` | 301 |
-| `/rassegna-stampa/` | `/rassegna-stampa.html` | 301 |
-| `/calendario-appuntamenti` | `/documentazione-clinica.html` | 301 |
-| `/calendario-appuntamenti/` | `/documentazione-clinica.html` | 301 |
+| `/cvitae` | `/cv-pubblicazioni.html` | 301 forzato |
+| `/cvitae/` | `/cv-pubblicazioni.html` | 301 forzato |
+| `/map` | `/sedi.html` | 301 forzato |
+| `/map/` | `/sedi.html` | 301 forzato |
+| `/rassegna-stampa` | `/rassegna-stampa.html` | 301 forzato |
+| `/rassegna-stampa/` | `/rassegna-stampa.html` | 301 forzato |
+| `/calendario-appuntamenti` | `/documentazione-clinica.html` | 301 forzato |
+| `/calendario-appuntamenti/` | `/documentazione-clinica.html` | 301 forzato |
 
-## Sottodomini `book` e `book2`
+Le vecchie cartelle statiche `cvitae/`, `map/`, `rassegna-stampa/` e `calendario-appuntamenti/` sono state eliminate dal repository. Non devono essere ricreate: su Netlify potrebbero ombreggiare i redirect HTTP. Anche `tools/site_maintenance.py` è stato modificato per mantenerle assenti.
+
+## Sottodomini `book`, `book2` e `m`
 
 Nel 2025 Google aveva acquisito sitemap anomale sul sottodominio `book.giancarlolupi.com`, contenenti migliaia di URL estranei all'attività medica. Il 3 settembre 2026:
 
 1. le sitemap spam sono state rimosse dal report Sitemap di Search Console;
 2. è stata inviata in Search Console una richiesta di rimozione temporanea dell'intero prefisso `https://book.giancarlolupi.com/`;
 3. i record DNS `book.giancarlolupi.com` e `book2.giancarlolupi.com`, entrambi diretti al precedente IP `81.88.62.4`, sono stati eliminati;
-4. gli URL spam non vengono reindirizzati alla Home del sito principale.
+4. è stato eliminato anche il CNAME storico `m.giancarlolupi.com` verso Wix;
+5. gli URL spam non vengono reindirizzati alla Home del sito principale.
 
-**Scelta definitiva:** non viene mantenuto alcun sistema di prenotazione via web. Le visite vengono organizzate esclusivamente tramite i recapiti delle strutture indicati nella pagina `sedi.html`. Non ricreare `book` o `book2` senza una nuova decisione esplicita.
+**Scelta definitiva:** non viene mantenuto alcun sistema di prenotazione via web. Le visite vengono organizzate esclusivamente tramite i recapiti delle strutture indicati nella pagina `sedi.html`. Non ricreare `book`, `book2` o altri sottodomini di prenotazione senza una nuova decisione esplicita.
 
 ## DNS attuale rilevante
 
@@ -48,8 +51,7 @@ Nel 2025 Google aveva acquisito sitemap anomale sul sottodominio `book.giancarlo
 - `www.giancarlolupi.com` CNAME → `musical-crumble-e96475.netlify.app`
 - TXT di verifica Google Search Console presente
 - nameserver autorevoli ancora Wix
-- `book` e `book2`: nessun record DNS
-- `m.giancarlolupi.com`: residuo storico Wix ancora da valutare separatamente
+- `book`, `book2` e `m`: nessun record DNS
 
 ## Search Console
 
@@ -64,12 +66,12 @@ Mantenere il record TXT di verifica DNS. Monitorare nelle settimane successive:
 
 ## File di produzione
 
-- `_redirects`: canonicalizzazione hostname, chiusura del sottodominio Netlify e redirect delle principali URL Wix.
+- `_redirects`: canonicalizzazione hostname, chiusura del sottodominio Netlify e redirect forzati delle principali URL Wix.
 - `_headers`: header di sicurezza Netlify.
 - `sitemap.xml`: sitemap del nuovo sito con `lastmod`.
 - `robots.txt`: riferimento alla sitemap definitiva.
 - `404.html`: pagina di errore del sito.
-- `tools/site_maintenance.py`: manutenzione tecnica coerente con l'architettura attuale; non riscrive `MIGRAZIONE-SEO.md`.
+- `tools/site_maintenance.py`: manutenzione tecnica coerente con Netlify; mantiene assenti i fallback statici, uniforma la voce “Seconda opinione” nel menu, i tempi di lettura e il markup FAQ.
 - `.github/workflows/site-maintenance.yml`: esecuzione **solo manuale** (`workflow_dispatch`) per evitare regressioni automatiche.
 
 ## Controlli ancora da completare prima della chiusura definitiva di Wix
@@ -77,5 +79,4 @@ Mantenere il record TXT di verifica DNS. Monitorare nelle settimane successive:
 - verificare periodicamente i redirect 301 delle URL storiche;
 - verificare indicizzazione di `seconda-opinione.html` e `rassegna-stampa.html`;
 - monitorare la richiesta di rimozione di `book.giancarlolupi.com` fino a completamento;
-- decidere se eliminare il residuo `m.giancarlolupi.com`;
 - mantenere attivo il dominio e la zona DNS anche dopo l'eventuale disattivazione del piano del vecchio sito Wix.

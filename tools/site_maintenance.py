@@ -1,14 +1,8 @@
 from pathlib import Path
+import json
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = "https://www.giancarlolupi.com"
-YEAR = "2026"
-LASTMOD = "2026-09-03"
-OG_IMAGE = f"{SITE}/assets/giancarlo-lupi-profile.webp"
-INDEPENDENCE_NOTE = (
-    "Sito professionale personale · indipendente dalle strutture presso cui viene svolta attività clinica"
-)
 
 PUBLIC_HTML = [
     ROOT / "index.html",
@@ -28,223 +22,111 @@ PUBLIC_HTML = [
     ROOT / "approfondimenti" / "robotica-neurochirurgia.html",
 ]
 
+FAQS = {
+    "colonna.html": [
+        ("Un'ernia del disco alla risonanza significa che devo operarmi?",
+         "No. Il reperto deve essere coerente con sintomi ed esame neurologico. Molte ernie migliorano con trattamento conservativo; la chirurgia viene considerata quando esiste un beneficio ragionevole atteso o un'indicazione urgente."),
+        ("Quando la sciatica diventa urgente?",
+         "Una perdita di forza nuova o rapidamente progressiva, disturbi sfinterici nuovi o anestesia perineale richiedono una valutazione urgente e non devono attendere una visita programmata."),
+        ("Una stenosi o una spondilolistesi richiedono sempre una stabilizzazione?",
+         "No. La necessità di una fusione dipende da instabilità, deformità, stenosi associata, sintomi e caratteristiche individuali. In alcuni casi è sufficiente una decompressione; in altri non è indicata chirurgia."),
+        ("Quanto dura l'intervento e quando si torna a guidare o al lavoro?",
+         "Non esiste un numero valido per tutte le procedure. Durata, ricovero e recupero cambiano in base al tipo di intervento, stato neurologico, attività lavorativa e decorso. È più corretto definire intervalli personalizzati dopo aver stabilito la procedura realmente indicata."),
+        ("Ha senso chiedere una seconda opinione se mi hanno già proposto un intervento?",
+         "Sì, soprattutto se si vogliono verificare indicazione, alternative o tempi. È utile portare le immagini complete e la proposta già ricevuta."),
+    ],
+    "neurochirurgia.html": [
+        ("Un meningioma scoperto per caso deve essere sempre operato?",
+         "No. Molti meningiomi incidentali possono essere osservati con controlli radiologici. Crescita, sintomi, edema, sede, età e rischio procedurale orientano la scelta."),
+        ("Un aneurisma cerebrale non rotto deve essere sempre trattato?",
+         "No. Dimensioni, sede, morfologia, fattori di rischio e caratteristiche del paziente vanno confrontati con il rischio delle opzioni terapeutiche e con quello dell'osservazione."),
+        ("Quanto dura il ricovero e quando si torna alle attività normali?",
+         "Non esiste una risposta unica per la neurochirurgia cranica. Tipo di procedura, sede della lesione, condizioni neurologiche e decorso post-operatorio cambiano in modo sostanziale tempi di ricovero e recupero. Gli intervalli utili vanno definiti dopo aver stabilito la strategia concreta."),
+        ("Perché è importante portare le immagini e non soltanto il referto?",
+         "Il referto sintetizza l'esame; la decisione neurochirurgica richiede spesso di valutare direttamente sede, rapporti anatomici, caratteristiche della lesione e confronto con studi precedenti."),
+        ("Posso chiedere una seconda opinione dopo che mi è stato proposto un intervento?",
+         "Sì. Può servire a confermare l'indicazione, chiarire alternative e tempi o individuare la necessità di ulteriori approfondimenti."),
+    ],
+}
 
-def read(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+
+def add_second_opinion_to_nav(text, path):
+    prefix = "../" if path.parent.name == "approfondimenti" else ""
+    href = prefix + "seconda-opinione.html"
+    match = re.search(r'(<nav class="navlinks"[^>]*>)(.*?)(</nav>)', text, re.I | re.S)
+    if not match or f'href="{href}"' in match.group(2):
+        return text
+    current = ' aria-current="page"' if path.name == "seconda-opinione.html" else ""
+    link = f'<a href="{href}"{current}>Seconda opinione</a>'
+    body = re.sub(
+        rf'(<a href="{re.escape(prefix)}neurochirurgia\.html"[^>]*>Neurochirurgia</a>)',
+        r'\1' + link,
+        match.group(2),
+        count=1,
+        flags=re.I,
+    )
+    return text[:match.start(2)] + body + text[match.end(2):]
 
 
-def write(path: Path, text: str) -> None:
+def fix_reading_times(text, path):
+    if path == ROOT / "index.html":
+        text = text.replace(
+            '<span>Colonna vertebrale</span><span>03 settembre 2026</span><span>4 min</span>',
+            '<span>Colonna vertebrale</span><span>03 settembre 2026</span><span>3 min</span>')
+        text = text.replace('<span>Diagnostica</span><span>3 min</span>',
+                            '<span>Diagnostica</span><span>2 min</span>')
+        text = text.replace('<span>Tecnologia</span><span>4 min</span>',
+                            '<span>Tecnologia</span><span>3 min</span>')
+    elif path == ROOT / "approfondimenti.html":
+        text = text.replace('<span>8 minuti</span>', '<span>3 minuti</span>')
+        text = text.replace('<div class="archive-reading">3 min</div>',
+                            '<div class="archive-reading">2 min</div>')
+        text = text.replace('<div class="archive-reading">4 min</div>',
+                            '<div class="archive-reading">3 min</div>')
+    elif path.name == "mal-di-schiena-quando-preoccuparsi.html":
+        text = text.replace('<span>8 minuti</span>', '<span>3 minuti</span>')
+    elif path.name == "risonanza-mal-di-schiena.html":
+        text = text.replace('<span>7 minuti</span>', '<span>2 minuti</span>')
+    elif path.name == "robotica-neurochirurgia.html":
+        text = text.replace('<span>9 minuti</span>', '<span>3 minuti</span>')
+    return text
+
+
+def add_faq_schema(text, path):
+    def strip_existing(match):
+        return "" if '"FAQPage"' in match.group(1) else match.group(0)
+
+    text = re.sub(r'<script type="application/ld\+json">(.*?)</script>',
+                  strip_existing, text, flags=re.I | re.S)
+    faqs = FAQS.get(path.name)
+    if not faqs:
+        return text
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {"@type": "Question", "name": q,
+             "acceptedAnswer": {"@type": "Answer", "text": a}}
+            for q, a in faqs
+        ],
+    }
+    tag = '<script type="application/ld+json">' + json.dumps(
+        schema, ensure_ascii=False, separators=(",", ":")) + "</script>"
+    return text.replace("</head>", tag + "</head>", 1)
+
+
+for path in PUBLIC_HTML:
+    text = path.read_text(encoding="utf-8")
+    text = add_second_opinion_to_nav(text, path)
+    text = fix_reading_times(text, path)
+    text = add_faq_schema(text, path)
     path.write_text(text, encoding="utf-8")
 
+# I fallback HTML erano necessari soltanto durante GitHub Pages.
+# Su Netlify devono restare assenti: i redirect HTTP sono definiti in _redirects.
+for legacy in ("cvitae", "map", "rassegna-stampa", "calendario-appuntamenti"):
+    fallback = ROOT / legacy / "index.html"
+    if fallback.exists():
+        fallback.unlink()
 
-def get_title(text: str) -> str:
-    m = re.search(r"<title>(.*?)</title>", text, re.I | re.S)
-    return re.sub(r"\s+", " ", m.group(1)).strip() if m else "Giancarlo Lupi | Neurochirurgo"
-
-
-def get_description(text: str) -> str:
-    patterns = [
-        r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']*)["\']',
-        r'<meta\s+content=["\']([^"\']*)["\']\s+name=["\']description["\']',
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            return m.group(1).strip()
-    return "Sito professionale personale di Giancarlo Lupi, neurochirurgo."
-
-
-def get_canonical(text: str, path: Path) -> str:
-    m = re.search(r'<link\s+rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']', text, re.I)
-    if m:
-        return m.group(1)
-    if path.name == "404.html":
-        return SITE + "/"
-    if path.parent.name == "approfondimenti":
-        return f"{SITE}/approfondimenti/{path.name}"
-    if path.name == "index.html":
-        return SITE + "/"
-    return f"{SITE}/{path.name}"
-
-
-def normalize_footer(text: str) -> str:
-    footer_bottom = (
-        '<div class="footer-bottom">'
-        f'<span>© {YEAR} Giancarlo Lupi. Tutti i diritti riservati.</span>'
-        f'<span>{INDEPENDENCE_NOTE}</span>'
-        "</div>"
-    )
-    return re.sub(
-        r'<div class="footer-bottom">.*?</div>',
-        footer_bottom,
-        text,
-        flags=re.I | re.S,
-    )
-
-
-def normalize_navigation_language(text: str) -> str:
-    replacements = {
-        ">Prenota una visita<": ">Sedi e contatti<",
-        ">Sedi e prenotazioni<": ">Sedi e contatti<",
-        ">Recapiti e prenotazioni →<": ">Recapiti per visite →<",
-        "Area editoriale · archivio avviato il 3 settembre 2026 · aggiornamento settimanale":
-            "Area editoriale · archivio avviato il 3 settembre 2026 · aggiornamenti periodici",
-        "Area editoriale · aggiornamento settimanale":
-            "Area editoriale · aggiornamenti periodici",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text
-
-
-def normalize_institutional_bylines(text: str) -> str:
-    replacements = {
-        "Neurochirurgia AOUP": "Neurochirurgo",
-        "Neurochirurgo AOUP": "Neurochirurgo",
-        "AOUP · Neurochirurgia": "Neurochirurgo",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text
-
-
-def normalize_reading_times(text: str) -> str:
-    text = text.replace(">8 min<", ">4 min<")
-    text = text.replace(">7 min<", ">3 min<")
-    text = text.replace(">9 min<", ">4 min<")
-    text = text.replace("8 min di lettura", "4 min di lettura")
-    text = text.replace("7 min di lettura", "3 min di lettura")
-    text = text.replace("9 min di lettura", "4 min di lettura")
-    return text
-
-
-def normalize_profile_image(text: str, path: Path) -> str:
-    pattern = r'<img\s+[^>]*src=["\'](?:\.\./)?assets/giancarlo-lupi-profile\.webp["\'][^>]*>'
-
-    def repl(match: re.Match) -> str:
-        tag = match.group(0)
-        tag = re.sub(r'\s+(?:width|height|fetchpriority)=["\'][^"\']*["\']', "", tag, flags=re.I)
-        attrs = ' width="700" height="525"'
-        if path.name == "index.html" and path.parent == ROOT:
-            attrs += ' fetchpriority="high"'
-        return tag[:-1] + attrs + ">"
-
-    return re.sub(pattern, repl, text, flags=re.I)
-
-
-def ensure_open_graph(text: str, path: Path) -> str:
-    text = re.sub(r'\s*<meta\s+property=["\']og:[^>]+>', "", text, flags=re.I)
-    title = get_title(text)
-    description = get_description(text)
-    canonical = get_canonical(text, path)
-    og_type = "article" if path.parent.name == "approfondimenti" else "website"
-    tags = (
-        f'\n<meta property="og:title" content="{title}">'
-        f'\n<meta property="og:description" content="{description}">'
-        f'\n<meta property="og:type" content="{og_type}">'
-        f'\n<meta property="og:locale" content="it_IT">'
-        f'\n<meta property="og:url" content="{canonical}">'
-        f'\n<meta property="og:image" content="{OG_IMAGE}">'
-        f'\n<meta property="og:image:width" content="700">'
-        f'\n<meta property="og:image:height" content="525">'
-        f'\n<meta property="og:image:alt" content="Giancarlo Lupi, neurochirurgo">'
-        f'\n<meta name="twitter:card" content="summary_large_image">\n'
-    )
-    return text.replace("</head>", tags + "</head>", 1)
-
-
-def make_qsalute_unambiguous(text: str) -> str:
-    text = text.replace(
-        '<div class="kicker">Il percorso visto dai pazienti</div>',
-        '<div class="kicker">Testimonianze sulla Neurochirurgia di Pisa</div>',
-    )
-    text = text.replace(
-        '<h2 style="font-size:46px">Ciò che resta della cura.</h2>',
-        '<h2 style="font-size:46px">Il percorso raccontato dai pazienti.</h2>',
-    )
-    text = text.replace(
-        "testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa, dato rilevato il 3 settembre 2026. Il numero dà contesto, non misura l'efficacia clinica.",
-        "testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa, dato rilevato il 3 settembre 2026. Non sono recensioni personali del Dott. Giancarlo Lupi e non costituiscono una misura di efficacia clinica.",
-    )
-    return text
-
-
-def process_public_html(path: Path) -> None:
-    text = read(path)
-    text = normalize_footer(text)
-    text = normalize_navigation_language(text)
-    text = normalize_institutional_bylines(text)
-    text = normalize_reading_times(text)
-    text = normalize_profile_image(text, path)
-    if path.name == "index.html" and path.parent == ROOT:
-        text = make_qsalute_unambiguous(text)
-    text = ensure_open_graph(text, path)
-    write(path, text)
-
-
-for html_path in PUBLIC_HTML:
-    process_public_html(html_path)
-
-write(
-    ROOT / "assets" / "script.js",
-    """const btn = document.querySelector('.menu-btn');\nconst nav = document.querySelector('.navlinks');\n\nif (btn && nav) {\n  btn.addEventListener('click', () => {\n    const open = nav.classList.toggle('open');\n    btn.setAttribute('aria-expanded', open ? 'true' : 'false');\n  });\n}\n""",
-)
-
-styles = read(ROOT / "assets" / "styles.css")
-styles = styles.replace("--muted:#6d747a;", "--muted:#5f666c;")
-styles = styles.replace(
-    '--sans:Inter,"Helvetica Neue",Arial,sans-serif;',
-    '--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;',
-)
-styles = styles.replace(
-    '--serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,"Times New Roman",serif;',
-    '--serif:Georgia,"Times New Roman",serif;',
-)
-write(ROOT / "assets" / "styles.css", styles)
-
-legacy_redirects = {
-    "cvitae": "/cv-pubblicazioni.html",
-    "map": "/sedi.html",
-    "rassegna-stampa": "/rassegna-stampa.html",
-    "calendario-appuntamenti": "/documentazione-clinica.html",
-}
-redirect_template = (
-    '<!doctype html><html lang="it"><head><meta charset="utf-8">'
-    '<meta name="robots" content="noindex">'
-    '<link rel="canonical" href="https://www.giancarlolupi.com{target}">'
-    '<meta http-equiv="refresh" content="0;url={target}">'
-    '<title>Pagina spostata</title>'
-    '<script>location.replace({target_js});</script></head>'
-    '<body><p>La pagina è stata spostata. <a href="{target}">Continua</a>.</p></body></html>'
-)
-for old, target in legacy_redirects.items():
-    directory = ROOT / old
-    directory.mkdir(exist_ok=True)
-    target_js = repr(target).replace("'", '"')
-    write(directory / "index.html", redirect_template.format(target=target, target_js=target_js))
-
-sitemap_items = [
-    ("/", "monthly"),
-    ("/colonna.html", "monthly"),
-    ("/neurochirurgia.html", "monthly"),
-    ("/medico.html", "monthly"),
-    ("/cv-pubblicazioni.html", "yearly"),
-    ("/seconda-opinione.html", "monthly"),
-    ("/documentazione-clinica.html", "yearly"),
-    ("/approfondimenti.html", "weekly"),
-    ("/rassegna-stampa.html", "yearly"),
-    ("/sedi.html", "monthly"),
-    ("/privacy.html", "monthly"),
-    ("/approfondimenti/mal-di-schiena-quando-preoccuparsi.html", "weekly"),
-    ("/approfondimenti/risonanza-mal-di-schiena.html", "weekly"),
-    ("/approfondimenti/robotica-neurochirurgia.html", "weekly"),
-]
-lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-for url, changefreq in sitemap_items:
-    lines.append(
-        f"<url><loc>{SITE}{url}</loc><lastmod>{LASTMOD}</lastmod><changefreq>{changefreq}</changefreq></url>"
-    )
-lines.append("</urlset>")
-write(ROOT / "sitemap.xml", "\n".join(lines))
-
-print("Manutenzione tecnica completata senza riscrivere i contenuti clinici o MIGRAZIONE-SEO.md")
+print("Manutenzione tecnica completata")

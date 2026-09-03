@@ -1,10 +1,7 @@
-name: Social image one-off
+name: Social image
 
 on:
-  push:
-    paths:
-      - 'tools/generate_og_image.py'
-      - '.github/workflows/social-image-once.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -30,5 +27,5 @@ jobs:
             echo "No changes"
             exit 0
           fi
-          git commit -m "Aggiunge immagine social 1200x630 e aggiorna Open Graph"
+          git commit -m "Aggiorna immagine social 1200x630 e Open Graph"
           git push

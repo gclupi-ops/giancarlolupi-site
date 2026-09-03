@@ -1,151 +1,253 @@
 from pathlib import Path
-import re, json
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def footer(prefix=""):
-    return f'''<footer>
-  <div class="container">
-    <div class="footer-grid">
-      <div>
-        <a class="brand" href="{prefix}index.html">
-          <span class="monogram">GL</span>
-          <span><strong>Giancarlo Lupi</strong><span>Neurochirurgo · MD PhD</span></span>
-        </a>
-        <p style="max-width:430px;margin-top:18px">Sito professionale personale dedicato a neurochirurgia, colonna vertebrale, informazione clinica e innovazione. I contenuti non sostituiscono la valutazione medica individuale.</p>
-      </div>
-      <div>
-        <div class="footer-title">Navigazione</div>
-        <p><a href="{prefix}medico.html">Il medico</a><br>
-        <a href="{prefix}colonna.html">Colonna vertebrale</a><br>
-        <a href="{prefix}neurochirurgia.html">Neurochirurgia</a><br>
-        <a href="{prefix}approfondimenti.html">Approfondimenti</a><br>
-        <a href="{prefix}sedi.html">Sedi e prenotazioni</a></p>
-      </div>
-      <div>
-        <div class="footer-title">Visite</div>
-        <p>Pisa · Ponsacco · Massa<br>
-        <a href="{prefix}sedi.html">Recapiti e prenotazioni →</a></p>
-        <p><a href="{prefix}privacy.html">Privacy e note informative</a></p>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© <span data-year></span> Giancarlo Lupi. Tutti i diritti riservati.</span>
-      <span>Sito professionale personale · indipendente dalle strutture presso cui viene svolta attività clinica</span>
-    </div>
-  </div>
-</footer>'''
-
-
-def replace_footer(path):
-    text = path.read_text(encoding="utf-8")
-    prefix = "../" if path.parent.name == "approfondimenti" else ""
-    text = re.sub(r"<footer>.*?</footer>", footer(prefix), text, flags=re.S)
-    text = text.replace('  "email":"g.lupi@ao-pisa.toscana.it",\n', '')
-    text = text.replace('"email":"g.lupi@ao-pisa.toscana.it",', '')
-    text = text.replace('g.lupi@ao-pisa.toscana.it', '')
-    text = text.replace('Nessun cookie di profilazione nel prototipo', 'Sito professionale personale')
-    path.write_text(text, encoding="utf-8")
-
-
-for html in ROOT.rglob("*.html"):
-    replace_footer(html)
-
-# Privacy: testo definitivo coerente con l'attuale assenza di moduli/analytics.
-privacy = ROOT / "privacy.html"
-text = privacy.read_text(encoding="utf-8")
-text = text.replace(
-    '<section class="page-hero"><div class="container"><div class="breadcrumb"><a href="index.html">Home</a> / Privacy</div><div class="kicker">Note informative</div><h1>Privacy e utilizzo del sito.</h1><p>Pagina tecnica iniziale del prototipo. Prima della pubblicazione definitiva deve essere verificata e completata in base agli strumenti effettivamente attivati.</p></div></section>',
-    '<section class="page-hero"><div class="container"><div class="breadcrumb"><a href="index.html">Home</a> / Privacy</div><div class="kicker">Note informative</div><h1>Privacy e utilizzo del sito.</h1><p>Informazioni essenziali sul funzionamento di questo sito professionale personale e sui servizi esterni collegati.</p></div></section>'
+SITE = "https://www.giancarlolupi.com"
+YEAR = "2026"
+LASTMOD = "2026-09-03"
+OG_IMAGE = f"{SITE}/assets/giancarlo-lupi-profile.webp"
+INDEPENDENCE_NOTE = (
+    "Sito professionale personale · indipendente dalle strutture presso cui viene svolta attività clinica"
 )
-section = re.search(r'<section class="section"><div class="container prose">.*?</div></section>', text, re.S)
-privacy_body = '''<section class="section"><div class="container prose">
-<h2>Finalità informativa</h2>
-<p>I contenuti hanno finalità informativa e divulgativa e non sostituiscono visita, diagnosi o indicazione terapeutica individuale.</p>
-<h2>Dati personali</h2>
-<p>Nella configurazione attuale il sito non contiene moduli di contatto, aree riservate, newsletter o sistemi per il caricamento di documentazione sanitaria. Le prenotazioni vengono effettuate tramite i recapiti delle strutture indicati nella pagina <a href="sedi.html">Sedi e prenotazioni</a>.</p>
-<p>Per ragioni di riservatezza, non inviare spontaneamente referti, immagini diagnostiche o altri dati sanitari tramite recapiti non espressamente predisposti dalla struttura di riferimento.</p>
-<h2>Cookie e analytics</h2>
-<p>Il sito non utilizza cookie di profilazione né servizi analytics propri. Qualora in futuro venissero introdotti strumenti che comportino trattamento di dati personali o tracciamento, questa informativa verrà aggiornata prima della loro attivazione.</p>
-<h2>Servizi e link esterni</h2>
-<p>I collegamenti a siti di strutture sanitarie, Google Maps, WhatsApp e altre fonti esterne portano a servizi gestiti da soggetti terzi, ai quali si applicano le rispettive informative privacy e condizioni d'uso.</p>
-<div class="callout"><strong>Aggiornamento.</strong> Informativa aggiornata il 3 settembre 2026. Il sito è professionale e personale e non costituisce un canale istituzionale dell'Azienda Ospedaliero-Universitaria Pisana o delle strutture private presso cui vengono svolte visite.</div>
-</div></section>'''
-if section:
-    text = text[:section.start()] + privacy_body + text[section.end():]
-privacy.write_text(text, encoding="utf-8")
 
-# Sedi: orari Ponsacco e dati strutturati delle sedi di attività.
-sedi = ROOT / "sedi.html"
-text = sedi.read_text(encoding="utf-8")
-wa = '<div class="contact-actions"><a class="contact-link" href="https://wa.me/393516216891" target="_blank" rel="noopener">Scrivi su WhatsApp ↗</a></div>'
-if 'Orari della struttura: lun–ven 07:00–19:30' not in text:
-    text = text.replace(wa, wa + '<div class="details">Orari della struttura: lun–ven 07:00–19:30 · sab 07:00–13:30</div>')
+PUBLIC_HTML = [
+    ROOT / "index.html",
+    ROOT / "colonna.html",
+    ROOT / "neurochirurgia.html",
+    ROOT / "medico.html",
+    ROOT / "cv-pubblicazioni.html",
+    ROOT / "documentazione-clinica.html",
+    ROOT / "approfondimenti.html",
+    ROOT / "sedi.html",
+    ROOT / "privacy.html",
+    ROOT / "404.html",
+    ROOT / "approfondimenti" / "mal-di-schiena-quando-preoccuparsi.html",
+    ROOT / "approfondimenti" / "risonanza-mal-di-schiena.html",
+    ROOT / "approfondimenti" / "robotica-neurochirurgia.html",
+]
 
-sedi_schema = {
-  "@context":"https://schema.org",
-  "@graph":[
-    {"@type":"Physician","@id":"https://www.giancarlolupi.com/#physician","name":"Giancarlo Lupi","url":"https://www.giancarlolupi.com/","medicalSpecialty":"Neurosurgery","areaServed":["Pisa","Ponsacco","Massa"],"workLocation":[{"@id":"https://www.giancarlolupi.com/#san-rossore"},{"@id":"https://www.giancarlolupi.com/#usi-valdera"},{"@id":"https://www.giancarlolupi.com/#ponticello"}]},
-    {"@type":"MedicalClinic","@id":"https://www.giancarlolupi.com/#san-rossore","name":"Casa di Cura San Rossore","address":{"@type":"PostalAddress","streetAddress":"Viale delle Cascine 152/F","postalCode":"56122","addressLocality":"Pisa","addressRegion":"PI","addressCountry":"IT"},"telephone":"+39 050 586217","url":"https://casadicurasanrossore.it/"},
-    {"@type":"MedicalClinic","@id":"https://www.giancarlolupi.com/#usi-valdera","name":"USI Valdera-Ponsacco","address":{"@type":"PostalAddress","streetAddress":"Via di Gello 175","postalCode":"56038","addressLocality":"Ponsacco","addressRegion":"PI","addressCountry":"IT"},"url":"https://www.usi.it/le-sedi/ponsacco","contactPoint":{"@type":"ContactPoint","telephone":"+39 351 621 6891","contactType":"appointments","availableLanguage":"it"},"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday"],"opens":"07:00","closes":"19:30"},{"@type":"OpeningHoursSpecification","dayOfWeek":"Saturday","opens":"07:00","closes":"13:30"}]},
-    {"@type":"MedicalClinic","@id":"https://www.giancarlolupi.com/#ponticello","name":"Centro Medico Ponticello","address":{"@type":"PostalAddress","streetAddress":"Via Ponticello Sud 4","postalCode":"54100","addressLocality":"Massa","addressRegion":"MS","addressCountry":"IT"},"telephone":"+39 0585 41847","url":"https://centromedicoponticello.it/"}
-  ]
-}
-text = re.sub(r'<script type="application/ld\+json">.*?</script>', '<script type="application/ld+json">\n'+json.dumps(sedi_schema, ensure_ascii=False, indent=2)+'\n</script>', text, count=1, flags=re.S)
-sedi.write_text(text, encoding="utf-8")
 
-# Home: storico editoriale e data del dato QSalute.
-home = ROOT / "index.html"
-text = home.read_text(encoding="utf-8")
-text = text.replace('Area editoriale · aggiornamento settimanale','Area editoriale · archivio avviato il 3 settembre 2026 · aggiornamento settimanale')
-text = text.replace('testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa. Il numero dà contesto, non misura l\'efficacia clinica.','testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa, dato rilevato il 3 settembre 2026. Il numero dà contesto, non misura l\'efficacia clinica.')
-home.write_text(text, encoding="utf-8")
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
-# Archivio editoriale: chiarisce la data di avvio senza retrodatare gli articoli.
-archive = ROOT / "approfondimenti.html"
-text = archive.read_text(encoding="utf-8")
-text = text.replace('<div class="kicker">Area editoriale</div>', '<div class="kicker">Area editoriale · archivio avviato il 3 settembre 2026</div>', 1)
-archive.write_text(text, encoding="utf-8")
 
-# Dati strutturati di base del professionista sulle pagine principali.
-physician_schema = {"@context":"https://schema.org","@type":"Physician","@id":"https://www.giancarlolupi.com/#physician","name":"Giancarlo Lupi","medicalSpecialty":"Neurosurgery","url":"https://www.giancarlolupi.com/","areaServed":["Pisa","Ponsacco","Massa"]}
-for filename in ["index.html","medico.html","colonna.html","neurochirurgia.html","approfondimenti.html"]:
-    path = ROOT / filename
-    text = path.read_text(encoding="utf-8")
-    pattern = r'<script type="application/ld\+json">\s*\{.*?"@type"\s*:\s*"Physician".*?</script>'
-    if re.search(pattern, text, re.S):
-        text = re.sub(pattern, '<script type="application/ld+json">\n'+json.dumps(physician_schema, ensure_ascii=False, indent=2)+'\n</script>', text, count=1, flags=re.S)
+def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
-# MedicalWebPage per gli articoli sanitari.
-article_meta = {
-  "mal-di-schiena-quando-preoccuparsi.html":("Mal di schiena: quando è un disturbo comune e quando richiede un approfondimento neurochirurgico?","Low back pain"),
-  "risonanza-mal-di-schiena.html":("Risonanza magnetica e mal di schiena: vedere di più non significa sempre capire di più","Magnetic resonance imaging of the spine"),
-  "robotica-neurochirurgia.html":("Robotica, navigazione e realtà aumentata nella chirurgia vertebrale: dove siamo davvero","Spine surgery technology")
-}
-for filename, (headline, about) in article_meta.items():
-    path = ROOT / "approfondimenti" / filename
-    text = path.read_text(encoding="utf-8")
-    url = f"https://www.giancarlolupi.com/approfondimenti/{filename}"
-    schema = {"@context":"https://schema.org","@type":"MedicalWebPage","@id":url+"#article","url":url,"headline":headline,"datePublished":"2026-09-03","dateModified":"2026-09-03","inLanguage":"it-IT","about":{"@type":"MedicalEntity","name":about},"author":{"@type":"Physician","@id":"https://www.giancarlolupi.com/#physician","name":"Giancarlo Lupi","medicalSpecialty":"Neurosurgery","url":"https://www.giancarlolupi.com/medico.html"},"medicalAudience":{"@type":"MedicalAudience","audienceType":"Patient"}}
-    if '"@type": "MedicalWebPage"' not in text and '"@type":"MedicalWebPage"' not in text:
-        text = text.replace('</head>', '<script type="application/ld+json">\n'+json.dumps(schema, ensure_ascii=False, indent=2)+'\n</script>\n</head>')
-    path.write_text(text, encoding="utf-8")
 
-# Fallback di migrazione per le principali URL Wix. Un vero 301 verrà impostato al cut-over del dominio.
-redirects = {
-  "cvitae":"/medico.html",
-  "map":"/sedi.html",
-  "rassegna-stampa":"/approfondimenti.html",
-  "calendario-appuntamenti":"/sedi.html"
+def get_title(text: str) -> str:
+    m = re.search(r"<title>(.*?)</title>", text, re.I | re.S)
+    return re.sub(r"\s+", " ", m.group(1)).strip() if m else "Giancarlo Lupi | Neurochirurgo"
+
+
+def get_description(text: str) -> str:
+    patterns = [
+        r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']*)["\']',
+        r'<meta\s+content=["\']([^"\']*)["\']\s+name=["\']description["\']',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text, re.I)
+        if m:
+            return m.group(1).strip()
+    return "Sito professionale personale di Giancarlo Lupi, neurochirurgo."
+
+
+def get_canonical(text: str, path: Path) -> str:
+    m = re.search(r'<link\s+rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']', text, re.I)
+    if m:
+        return m.group(1)
+    if path.name == "404.html":
+        return SITE + "/"
+    if path.parent.name == "approfondimenti":
+        return f"{SITE}/approfondimenti/{path.name}"
+    if path.name == "index.html":
+        return SITE + "/"
+    return f"{SITE}/{path.name}"
+
+
+def normalize_footer(text: str) -> str:
+    footer_bottom = (
+        '<div class="footer-bottom">'
+        f'<span>© {YEAR} Giancarlo Lupi. Tutti i diritti riservati.</span>'
+        f'<span>{INDEPENDENCE_NOTE}</span>'
+        "</div>"
+    )
+    return re.sub(
+        r'<div class="footer-bottom">.*?</div>',
+        footer_bottom,
+        text,
+        flags=re.I | re.S,
+    )
+
+
+def normalize_navigation_language(text: str) -> str:
+    replacements = {
+        ">Prenota una visita<": ">Sedi e contatti<",
+        ">Sedi e prenotazioni<": ">Sedi e contatti<",
+        ">Recapiti e prenotazioni →<": ">Recapiti per visite →<",
+        "Area editoriale · archivio avviato il 3 settembre 2026 · aggiornamento settimanale":
+            "Area editoriale · archivio avviato il 3 settembre 2026 · aggiornamenti periodici",
+        "Area editoriale · aggiornamento settimanale":
+            "Area editoriale · aggiornamenti periodici",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def normalize_institutional_bylines(text: str) -> str:
+    replacements = {
+        "Neurochirurgia AOUP": "Neurochirurgo",
+        "Neurochirurgo AOUP": "Neurochirurgo",
+        "AOUP · Neurochirurgia": "Neurochirurgo",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def normalize_reading_times(text: str) -> str:
+    # Tempi basati sulla lunghezza reale dei tre articoli (circa 200-230 parole/minuto).
+    text = text.replace(">8 min<", ">4 min<")
+    text = text.replace(">7 min<", ">3 min<")
+    text = text.replace(">9 min<", ">4 min<")
+    text = text.replace("8 min di lettura", "4 min di lettura")
+    text = text.replace("7 min di lettura", "3 min di lettura")
+    text = text.replace("9 min di lettura", "4 min di lettura")
+    return text
+
+
+def normalize_profile_image(text: str, path: Path) -> str:
+    pattern = r'<img\s+[^>]*src=["\'](?:\.\./)?assets/giancarlo-lupi-profile\.webp["\'][^>]*>'
+
+    def repl(match: re.Match) -> str:
+        tag = match.group(0)
+        tag = re.sub(r'\s+(?:width|height|fetchpriority)=["\'][^"\']*["\']', "", tag, flags=re.I)
+        attrs = ' width="700" height="525"'
+        if path.name == "index.html" and path.parent == ROOT:
+            attrs += ' fetchpriority="high"'
+        return tag[:-1] + attrs + ">"
+
+    return re.sub(pattern, repl, text, flags=re.I)
+
+
+def ensure_open_graph(text: str, path: Path) -> str:
+    # Elimina i vecchi tag Open Graph per evitare duplicati e ricostruisce un set uniforme.
+    text = re.sub(r'\s*<meta\s+property=["\']og:[^>]+>', "", text, flags=re.I)
+    title = get_title(text)
+    description = get_description(text)
+    canonical = get_canonical(text, path)
+    og_type = "article" if path.parent.name == "approfondimenti" else "website"
+    tags = (
+        f'\n<meta property="og:title" content="{title}">'
+        f'\n<meta property="og:description" content="{description}">'
+        f'\n<meta property="og:type" content="{og_type}">'
+        f'\n<meta property="og:locale" content="it_IT">'
+        f'\n<meta property="og:url" content="{canonical}">'
+        f'\n<meta property="og:image" content="{OG_IMAGE}">'
+        f'\n<meta property="og:image:width" content="700">'
+        f'\n<meta property="og:image:height" content="525">'
+        f'\n<meta property="og:image:alt" content="Giancarlo Lupi, neurochirurgo">'
+        f'\n<meta name="twitter:card" content="summary_large_image">\n'
+    )
+    return text.replace("</head>", tags + "</head>", 1)
+
+
+def make_qsalute_unambiguous(text: str) -> str:
+    text = text.replace(
+        '<div class="kicker">Il percorso visto dai pazienti</div>',
+        '<div class="kicker">Testimonianze sulla Neurochirurgia di Pisa</div>',
+    )
+    text = text.replace(
+        '<h2 style="font-size:46px">Ciò che resta della cura.</h2>',
+        '<h2 style="font-size:46px">Il percorso raccontato dai pazienti.</h2>',
+    )
+    text = text.replace(
+        "testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa, dato rilevato il 3 settembre 2026. Il numero dà contesto, non misura l'efficacia clinica.",
+        "testimonianze pubblicate sulla pagina QSalute della Neurochirurgia di Pisa, dato rilevato il 3 settembre 2026. Non sono recensioni personali del Dott. Giancarlo Lupi e non costituiscono una misura di efficacia clinica.",
+    )
+    return text
+
+
+def process_public_html(path: Path) -> None:
+    text = read(path)
+    text = normalize_footer(text)
+    text = normalize_navigation_language(text)
+    text = normalize_institutional_bylines(text)
+    text = normalize_reading_times(text)
+    text = normalize_profile_image(text, path)
+    if path.name == "index.html" and path.parent == ROOT:
+        text = make_qsalute_unambiguous(text)
+    text = ensure_open_graph(text, path)
+    write(path, text)
+
+
+for html_path in PUBLIC_HTML:
+    process_public_html(html_path)
+
+# JavaScript: soltanto comportamento del menu mobile. I contenuti editoriali/deontologici
+# devono essere presenti nell'HTML e non dipendere dall'esecuzione di JavaScript.
+write(
+    ROOT / "assets" / "script.js",
+    """const btn = document.querySelector('.menu-btn');\nconst nav = document.querySelector('.navlinks');\n\nif (btn && nav) {\n  btn.addEventListener('click', () => {\n    const open = nav.classList.toggle('open');\n    btn.setAttribute('aria-expanded', open ? 'true' : 'false');\n  });\n}\n""",
+)
+
+# Tipografia cross-platform deliberata e contrasto AA più robusto.
+styles = read(ROOT / "assets" / "styles.css")
+styles = styles.replace("--muted:#6d747a;", "--muted:#5f666c;")
+styles = styles.replace(
+    '--sans:Inter,"Helvetica Neue",Arial,sans-serif;',
+    '--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;',
+)
+styles = styles.replace(
+    '--serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,"Times New Roman",serif;',
+    '--serif:Georgia,"Times New Roman",serif;',
+)
+write(ROOT / "assets" / "styles.css", styles)
+
+# Redirect fallback: coerenti con i veri 301 Netlify. Non riscrivere MIGRAZIONE-SEO.md.
+legacy_redirects = {
+    "cvitae": "/cv-pubblicazioni.html",
+    "map": "/sedi.html",
+    "rassegna-stampa": "/approfondimenti.html",
+    "calendario-appuntamenti": "/documentazione-clinica.html",
 }
-redirect_template = '''<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="robots" content="noindex"><link rel="canonical" href="https://www.giancarlolupi.com{target}"><meta http-equiv="refresh" content="0;url={target}"><title>Pagina spostata</title><script>location.replace({target_js});</script></head><body><p>La pagina è stata spostata. <a href="{target}">Continua</a>.</p></body></html>'''
-for old, target in redirects.items():
+redirect_template = (
+    '<!doctype html><html lang="it"><head><meta charset="utf-8">'
+    '<meta name="robots" content="noindex">'
+    '<link rel="canonical" href="https://www.giancarlolupi.com{target}">'
+    '<meta http-equiv="refresh" content="0;url={target}">'
+    '<title>Pagina spostata</title>'
+    '<script>location.replace({target_js});</script></head>'
+    '<body><p>La pagina è stata spostata. <a href="{target}">Continua</a>.</p></body></html>'
+)
+for old, target in legacy_redirects.items():
     directory = ROOT / old
     directory.mkdir(exist_ok=True)
-    (directory / "index.html").write_text(redirect_template.format(target=target, target_js=json.dumps(target)), encoding="utf-8")
+    target_js = repr(target).replace("'", '"')
+    write(directory / "index.html", redirect_template.format(target=target, target_js=target_js))
 
-(ROOT / "MIGRAZIONE-SEO.md").write_text('''# Migrazione SEO dal sito Wix\n\nURL principali rilevate sul sito precedente e destinazione prevista:\n\n- `/cvitae` → `/medico.html`\n- `/map` → `/sedi.html`\n- `/rassegna-stampa` → `/approfondimenti.html`\n- `/calendario-appuntamenti` → `/sedi.html`\n\nGitHub Pages non consente di configurare veri redirect HTTP 301 lato server. Le pagine fallback incluse nel repository evitano link morti, ma al passaggio del dominio è preferibile applicare veri 301 tramite un hosting/edge che li supporti.\n\nIl `sitemap.xml` è già predisposto sul dominio definitivo. Dopo il cut-over: inviare la sitemap in Google Search Console e controllare indicizzazione, canonical e pagine 404.\n''', encoding="utf-8")
+# Sitemap: lastmod è il segnale temporale utile; changefreq resta solo descrittivo.
+sitemap_items = [
+    ("/", "monthly"),
+    ("/colonna.html", "monthly"),
+    ("/neurochirurgia.html", "monthly"),
+    ("/medico.html", "monthly"),
+    ("/cv-pubblicazioni.html", "yearly"),
+    ("/documentazione-clinica.html", "yearly"),
+    ("/approfondimenti.html", "weekly"),
+    ("/sedi.html", "monthly"),
+    ("/privacy.html", "monthly"),
+    ("/approfondimenti/mal-di-schiena-quando-preoccuparsi.html", "weekly"),
+    ("/approfondimenti/risonanza-mal-di-schiena.html", "weekly"),
+    ("/approfondimenti/robotica-neurochirurgia.html", "weekly"),
+]
+lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+for url, changefreq in sitemap_items:
+    lines.append(
+        f"<url><loc>{SITE}{url}</loc><lastmod>{LASTMOD}</lastmod><changefreq>{changefreq}</changefreq></url>"
+    )
+lines.append("</urlset>")
+write(ROOT / "sitemap.xml", "\n".join(lines))
 
-print('Manutenzione completata')
+print("Manutenzione tecnica completata senza riscrivere i contenuti clinici o MIGRAZIONE-SEO.md")

@@ -115,11 +115,61 @@ def add_faq_schema(text, path):
     return text.replace("</head>", tag + "</head>", 1)
 
 
+def promote_qsalute_on_home(text, path):
+    if path != ROOT / "index.html":
+        return text
+
+    # Richiamo diretto dalla hero, leggibile ma distinto dalle CTA di prenotazione/contatto.
+    if 'class="hero-proof"' not in text:
+        hero_note = re.search(r'(<p class="hero-note">.*?</p>)', text, re.I | re.S)
+        if hero_note:
+            proof = ('<p class="hero-proof"><a href="#testimonianze">'
+                     'Leggi la sintesi delle 141 testimonianze su QSalute →</a>'
+                     '<span>Neurochirurgia di Pisa · non recensioni personali</span></p>')
+            text = text[:hero_note.end()] + proof + text[hero_note.end():]
+
+    # CSS locale della Home per il richiamo e l’ancora.
+    if '.hero-proof{' not in text:
+        css = ('\n.hero-proof{margin-top:18px;padding-top:15px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:7px 14px;align-items:baseline;font-size:13px}'
+               '.hero-proof a{color:var(--blue);font-weight:700;text-decoration:none}'
+               '.hero-proof a:hover{text-decoration:underline}'
+               '.hero-proof span{color:var(--muted);font-size:11px;letter-spacing:.02em}'
+               '#testimonianze{scroll-margin-top:96px}'
+               '.voice-summary{max-width:520px;margin:0 0 18px;color:var(--muted);font-size:15px;line-height:1.65}\n')
+        text = text.replace('</style>', css + '</style>', 1)
+
+    # Individua il blocco QSalute, lo rende semanticamente più chiaro e lo porta in alto.
+    match = re.search(
+        r'<section class="section warm"(?:[^>]*)><div class="container patient-voice">.*?</section>',
+        text, re.I | re.S)
+    if not match:
+        return text
+
+    block = match.group(0)
+    text = text[:match.start()] + text[match.end():]
+
+    block = re.sub(r'<section class="section warm"(?:[^>]*)>',
+                   '<section class="section warm" id="testimonianze" aria-labelledby="testimonianze-title">',
+                   block, count=1)
+    block = block.replace(
+        '<div class="kicker">Testimonianze sulla Neurochirurgia di Pisa</div><h2 style="font-size:46px">Il percorso raccontato dai pazienti.</h2>',
+        '<div class="kicker">QSalute · sintesi delle testimonianze</div><h2 id="testimonianze-title" style="font-size:46px">Cosa raccontano i pazienti della Neurochirurgia di Pisa.</h2><p class="voice-summary">Una sintesi per temi ricorrenti: chiarezza, appropriatezza, relazione ed équipe.</p>')
+
+    marker = '\n<section class="section soft">'
+    if marker in text:
+        text = text.replace(marker, '\n' + block + marker, 1)
+    else:
+        # Fallback prudente: reinserisce il blocco prima dell’area editoriale.
+        text = text.replace('\n<section class="journal"', '\n' + block + '\n<section class="journal"', 1)
+    return text
+
+
 for path in PUBLIC_HTML:
     text = path.read_text(encoding="utf-8")
     text = add_second_opinion_to_nav(text, path)
     text = fix_reading_times(text, path)
     text = add_faq_schema(text, path)
+    text = promote_qsalute_on_home(text, path)
     path.write_text(text, encoding="utf-8")
 
 # I fallback HTML erano necessari soltanto durante GitHub Pages.

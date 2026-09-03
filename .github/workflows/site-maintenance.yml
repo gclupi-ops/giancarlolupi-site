@@ -2,10 +2,6 @@ name: Site maintenance
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'tools/site_maintenance.py'
-      - 'tools/identity_schema.py'
 
 permissions:
   contents: write

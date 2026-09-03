@@ -1,6 +1,9 @@
 name: Site maintenance
 
 on:
+  push:
+    paths:
+      - 'tools/site_maintenance.py'
   workflow_dispatch:
 
 permissions:

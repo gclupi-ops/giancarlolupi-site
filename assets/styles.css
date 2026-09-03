@@ -3,7 +3,7 @@
   --deep:#0d2032;
   --deep-2:#132b42;
   --text:#38424b;
-  --muted:#6d747a;
+  --muted:#5f666c;
   --line:#d8dde1;
   --line-dark:rgba(255,255,255,.18);
   --paper:#f5f4f0;
@@ -13,8 +13,8 @@
   --blue-soft:#e9f2f9;
   --white:#fff;
   --max:1340px;
-  --sans:Inter,"Helvetica Neue",Arial,sans-serif;
-  --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:Georgia,"Times New Roman",serif;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}

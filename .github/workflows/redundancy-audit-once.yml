@@ -1,0 +1,59 @@
+name: Redundancy audit once
+
+on:
+  push:
+    branches:
+      - redundancy-audit-2026-09-04
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit visible structure
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import re
+
+          class MainBlocks(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.stack=[]; self.in_main=False; self.main_depth=None
+                  self.current=None; self.blocks=[]
+              def handle_starttag(self, tag, attrs):
+                  attrs=dict(attrs)
+                  self.stack.append(tag)
+                  if tag=='main' and not self.in_main:
+                      self.in_main=True; self.main_depth=len(self.stack)
+                      return
+                  if self.in_main and len(self.stack)==self.main_depth+1 and tag in ('section','div','article','aside'):
+                      self.current={'tag':tag,'class':attrs.get('class',''),'id':attrs.get('id',''),'text':[],'depth':len(self.stack)}
+              def handle_data(self,data):
+                  if self.current:
+                      t=' '.join(data.split())
+                      if t: self.current['text'].append(t)
+              def handle_endtag(self,tag):
+                  if self.current and len(self.stack)==self.current['depth'] and tag==self.current['tag']:
+                      self.blocks.append(self.current); self.current=None
+                  if tag=='main' and self.in_main:
+                      self.in_main=False
+                  if self.stack: self.stack.pop()
+
+          files=[p for p in Path('.').glob('*.html')] + [p for p in Path('approfondimenti').glob('*.html')]
+          for p in sorted(files, key=lambda x:str(x)):
+              s=p.read_text(encoding='utf-8')
+              parser=MainBlocks(); parser.feed(s)
+              print('\n###',p)
+              for i,b in enumerate(parser.blocks,1):
+                  txt=re.sub(r'\s+',' ',' '.join(b['text'])).strip()
+                  print(f"{i:02d}. <{b['tag']}> class={b['class']!r} id={b['id']!r} :: {txt[:260]}")
+              # suspicious standalone / repeated presentation blocks
+              for cls in ['journal-principles','hero-trust','callout','cta-band','editorial-signature','institution-note','journal-evidence','article-author','article-meta','topic-nav']:
+                  n=s.count(cls)
+                  if n: print(f"   class-token {cls}: {n}")
+          PY

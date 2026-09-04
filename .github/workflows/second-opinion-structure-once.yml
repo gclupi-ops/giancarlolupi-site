@@ -1,0 +1,42 @@
+name: Second opinion structure once
+
+on:
+  push:
+    branches:
+      - redundancy-audit-2026-09-04
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Integrate urgency note
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('seconda-opinione.html')
+          s=p.read_text(encoding='utf-8')
+          old='<section class="section"><div class="container split"><div><div class="kicker">Documentazione</div>'
+          new='<section class="section"><div class="container"><div class="split"><div><div class="kicker">Documentazione</div>'
+          if old not in s: raise SystemExit('documentation section opening not found')
+          s=s.replace(old,new,1)
+          old2='</p></div></div></section><section class="section soft"><div class="container"><div class="callout"><strong>Urgenza.</strong> Una seconda opinione ambulatoriale non deve ritardare l\'accesso a un servizio di emergenza in presenza di deficit neurologico acuto o rapidamente progressivo, disturbi sfinterici nuovi, alterazione improvvisa dello stato di coscienza o altri sintomi neurologici acuti.</div></div></section>'
+          new2='</p></div></div><div class="callout" style="margin-top:34px"><strong>Urgenza.</strong> Una seconda opinione ambulatoriale non deve ritardare l\'accesso a un servizio di emergenza in presenza di deficit neurologico acuto o rapidamente progressivo, disturbi sfinterici nuovi, alterazione improvvisa dello stato di coscienza o altri sintomi neurologici acuti.</div></div></section>'
+          if old2 not in s: raise SystemExit('urgency boundary not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s,encoding='utf-8')
+          Path('.github/workflows/second-opinion-structure-once.yml').unlink()
+          PY
+      - name: Commit
+        run: |
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Integra la nota urgenza nella sezione documentazione"
+          git push origin HEAD:redundancy-audit-2026-09-04

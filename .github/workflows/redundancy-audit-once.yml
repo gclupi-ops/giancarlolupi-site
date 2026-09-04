@@ -1,4 +1,4 @@
-name: Redundancy audit once
+name: Redundancy cleanup once
 
 on:
   push:
@@ -6,54 +6,88 @@ on:
       - redundancy-audit-2026-09-04
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Audit visible structure
+        with:
+          fetch-depth: 0
+      - name: Remove redundant and floating blocks
         run: |
           python - <<'PY'
-          from html.parser import HTMLParser
           from pathlib import Path
           import re
 
-          class MainBlocks(HTMLParser):
-              def __init__(self):
-                  super().__init__(convert_charrefs=True)
-                  self.stack=[]; self.in_main=False; self.main_depth=None
-                  self.current=None; self.blocks=[]
-              def handle_starttag(self, tag, attrs):
-                  attrs=dict(attrs)
-                  self.stack.append(tag)
-                  if tag=='main' and not self.in_main:
-                      self.in_main=True; self.main_depth=len(self.stack)
-                      return
-                  if self.in_main and len(self.stack)==self.main_depth+1 and tag in ('section','div','article','aside'):
-                      self.current={'tag':tag,'class':attrs.get('class',''),'id':attrs.get('id',''),'text':[],'depth':len(self.stack)}
-              def handle_data(self,data):
-                  if self.current:
-                      t=' '.join(data.split())
-                      if t: self.current['text'].append(t)
-              def handle_endtag(self,tag):
-                  if self.current and len(self.stack)==self.current['depth'] and tag==self.current['tag']:
-                      self.blocks.append(self.current); self.current=None
-                  if tag=='main' and self.in_main:
-                      self.in_main=False
-                  if self.stack: self.stack.pop()
+          def load(p): return Path(p).read_text(encoding='utf-8')
+          def save(p,s): Path(p).write_text(s,encoding='utf-8')
+          def sub_once(s, pattern, repl, label, flags=0):
+              out,n=re.subn(pattern,repl,s,count=1,flags=flags)
+              if n!=1: raise SystemExit(f'{label}: expected 1 replacement, got {n}')
+              return out
 
-          files=[p for p in Path('.').glob('*.html')] + [p for p in Path('approfondimenti').glob('*.html')]
-          for p in sorted(files, key=lambda x:str(x)):
-              s=p.read_text(encoding='utf-8')
-              parser=MainBlocks(); parser.feed(s)
-              print('\n###',p)
-              for i,b in enumerate(parser.blocks,1):
-                  txt=re.sub(r'\s+',' ',' '.join(b['text'])).strip()
-                  print(f"{i:02d}. <{b['tag']}> class={b['class']!r} id={b['id']!r} :: {txt[:260]}")
-              # suspicious standalone / repeated presentation blocks
-              for cls in ['journal-principles','hero-trust','callout','cta-band','editorial-signature','institution-note','journal-evidence','article-author','article-meta','topic-nav']:
-                  n=s.count(cls)
-                  if n: print(f"   class-token {cls}: {n}")
+          # Home: remove the duplicated trust strip, redundant editorial byline and floating principles.
+          p='index.html'; s=load(p)
+          s=sub_once(s,r'<div class="hero-trust">.*?</div></div>\s*<section class="section">','<section class="section">','home hero-trust',re.S)
+          s=sub_once(s,r'<div class="editorial-signature">.*?</div>','','home editorial signature',re.S)
+          s=sub_once(s,r'<div class="journal-principles">.*?</div>','','home journal principles',re.S)
+          save(p,s)
+
+          # Editorial archive: hero already explains authorship; keep one explicit Method section, remove duplicate manifesto/topic strip.
+          p='approfondimenti.html'; s=load(p)
+          s=sub_once(s,r'<div class="editorial-byline">.*?</div>','','archive byline',re.S)
+          s=sub_once(s,r'<section class="section editorial-manifesto">.*?</section>\s*','','archive duplicate manifesto',re.S)
+          s=s.replace('<div class="kicker">Metodo</div><h2>Come viene costruito un articolo.</h2>','<div class="kicker">Metodo editoriale</div><h2>Come viene costruito un articolo.</h2>',1)
+          save(p,s)
+
+          # Articles: sources and disclaimer already explain method; remove the repeated side-box.
+          for p in ['approfondimenti/mal-di-schiena-quando-preoccuparsi.html','approfondimenti/risonanza-mal-di-schiena.html','approfondimenti/robotica-neurochirurgia.html']:
+              s=load(p)
+              s=sub_once(s,r'<div class="aside-box"><div class="kicker">Linea editoriale</div><p>.*?</p></div>','','article duplicate editorial box',re.S)
+              save(p,s)
+
+          # Profile: QSalute is already presented on Home; avoid repeating social proof on the personal profile.
+          p='medico.html'; s=load(p)
+          s=sub_once(s,r'<section class="section warm">.*?</section>','','profile duplicate QSalute section',re.S)
+          save(p,s)
+
+          # CV: footer/navigation already reconnect to the clinical profile; remove isolated return CTA.
+          p='cv-pubblicazioni.html'; s=load(p)
+          s=sub_once(s,r'<section class="section"><div class="container"><div class="cta-band"><div><div class="kicker">Profilo professionale</div>.*?</section>','','cv return CTA',re.S)
+          save(p,s)
+
+          # Locations: hero + each card already explain booking; remove repeated booking callout under the cards.
+          p='sedi.html'; s=load(p)
+          s=sub_once(s,r'<div class="callout" style="margin-top:34px">.*?</div>','','locations repeated booking callout',re.S)
+          save(p,s)
+
+          # Privacy: keep the update information but not as a visual callout.
+          p='privacy.html'; s=load(p)
+          old='<div class="callout"><strong>Aggiornamento.</strong> Informativa aggiornata il 3 settembre 2026. Il sito è professionale e personale e non costituisce un canale istituzionale dell\'Azienda Ospedaliero-Universitaria Pisana o delle strutture private presso cui vengono svolte visite.</div>'
+          new='<p class="meta"><strong>Aggiornamento.</strong> Informativa aggiornata il 3 settembre 2026. Il sito è professionale e personale e non costituisce un canale istituzionale dell\'Azienda Ospedaliero-Universitaria Pisana o delle strutture private presso cui vengono svolte visite.</p>'
+          if old not in s: raise SystemExit('privacy update block not found')
+          s=s.replace(old,new,1); save(p,s)
+
+          # Sanity checks: intentionally retained callouts are clinical/urgent/decision-oriented.
+          checks={
+            'index.html':['journal-principles','hero-trust','editorial-signature'],
+            'approfondimenti.html':['editorial-manifesto','topic-nav','editorial-byline'],
+            'medico.html':['section warm'],
+          }
+          for p,tokens in checks.items():
+              s=load(p)
+              for t in tokens:
+                  if t in s: raise SystemExit(f'{p}: stale token {t}')
+
+          Path('.github/workflows/redundancy-audit-once.yml').unlink()
           PY
+      - name: Commit cleanup
+        run: |
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Rimuove elementi ridondanti e galleggianti"
+          git push origin HEAD:redundancy-audit-2026-09-04

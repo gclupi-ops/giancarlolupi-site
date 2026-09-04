@@ -1,0 +1,44 @@
+name: Design unification once
+
+on:
+  push:
+    branches:
+      - design-unification-2026-09-04
+
+permissions:
+  contents: write
+
+jobs:
+  unify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Unify typography, footer and contact actions
+        run: python tools/unify_design_once.py
+      - name: Verify generated site
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root = Path('.')
+          html = sorted(root.glob('*.html')) + sorted((root/'approfondimenti').glob('*.html'))
+          assert len(html) == 15
+          for p in html:
+              s = p.read_text(encoding='utf-8')
+              assert 'editorial-v2.css' not in s
+              assert s.count('<footer') == 1
+          assert not (root/'assets/editorial-v2.css').exists()
+          assert (root/'assets/styles.css').exists()
+          assert (root/'sedi.html').read_text(encoding='utf-8').count('class="phone phone-cta"') == 3
+          print('Verification OK: 15 HTML pages, one stylesheet, unified footer, 3 phone CTAs.')
+          PY
+      - name: Commit generated changes
+        run: |
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Uniforma tipografia, footer e recapiti"
+          git push origin HEAD:design-unification-2026-09-04

@@ -170,3 +170,7 @@ h3,.card h3,.voice-card h3,.location h3,.article-card h3,.dossier-item h3,.archi
  .section-head p,.journal-intro p,.manifesto-copy{font-size:19px}
  .phone-cta strong{font-size:23px}
 }
+
+
+/* Microtype floor · 2026-09-04 */
+.hero-art .label span,.editorial-mast .issue,.topic-nav span,.footer-bottom{font-size:var(--type-label);line-height:1.45}

@@ -17,15 +17,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Enforce 13px minimum on remaining metadata
-        run: |
-          if ! grep -q "Microtype floor · 2026-09-04" assets/styles.css; then
-            cat >> assets/styles.css <<'EOF'
-
-/* Microtype floor · 2026-09-04 */
-.hero-art .label span,.editorial-mast .issue,.topic-nav span,.footer-bottom{font-size:var(--type-label);line-height:1.45}
-EOF
-          fi
-          rm -f .github/workflows/microtype-floor-once.yml
+        run: python -c "from pathlib import Path; p=Path('assets/styles.css'); s=p.read_text(encoding='utf-8'); marker='/* Microtype floor · 2026-09-04 */'; rule='.hero-art .label span,.editorial-mast .issue,.topic-nav span,.footer-bottom{font-size:var(--type-label);line-height:1.45}'; p.write_text(s if marker in s else s+'\\n\\n'+marker+'\\n'+rule+'\\n', encoding='utf-8')"
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/microtype-floor-once.yml
       - name: Verify and commit
         run: |
           grep -q "Microtype floor · 2026-09-04" assets/styles.css

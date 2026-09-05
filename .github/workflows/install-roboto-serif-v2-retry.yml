@@ -1,0 +1,139 @@
+name: Install Roboto Serif v2 retry
+
+on:
+  push:
+    paths:
+      - '.github/font-chunks/part-015'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild exact font and update references
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/font-chunks/part-0* > /tmp/font.b64
+          base64 -d /tmp/font.b64 > assets/fonts/roboto-serif-v2.woff2
+          echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
+          test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
+          rm -f assets/fonts/roboto-serif.woff2
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          old = '/assets/fonts/roboto-serif.woff2'
+          new = '/assets/fonts/roboto-serif-v2.woff2'
+          css = Path('assets/styles.css')
+          s = css.read_text(encoding='utf-8')
+          assert s.count(old) == 1
+          css.write_text(s.replace(old, new), encoding='utf-8')
+          pages = sorted(Path('.').glob('*.html')) + sorted(Path('approfondimenti').glob('*.html'))
+          assert len(pages) == 16
+          for p in pages:
+              t = p.read_text(encoding='utf-8')
+              assert t.count(old) == 1, p
+              t = t.replace(old, new)
+              t, n = re.subn(r'(styles\.css\?v=)[0-9-]+', r'\g<1>20260905-3', t, count=1)
+              assert n == 1, p
+              p.write_text(t, encoding='utf-8')
+          print('Updated 16 HTML pages')
+          PY
+
+      - name: Verify source and glyph coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f assets/fonts/roboto-serif-v2.woff2
+          test ! -e assets/fonts/roboto-serif.woff2
+          test "$(grep -RIl --include='*.html' '/assets/fonts/roboto-serif-v2.woff2' . | wc -l)" -eq 16
+          test "$(grep -RIl --include='*.html' 'styles.css?v=20260905-3' . | wc -l)" -eq 16
+          pip install --quiet fonttools
+          python3 - <<'PY'
+          from fontTools.ttLib import TTFont
+          f = TTFont('assets/fonts/roboto-serif-v2.woff2')
+          cmap = set()
+          for table in f['cmap'].tables:
+              cmap.update(table.cmap.keys())
+          needed = {0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D}
+          assert not (needed - cmap), sorted(needed - cmap)
+          print('Required punctuation glyphs present')
+          PY
+
+      - name: Commit clean final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/font-chunks
+          rm -f .github/workflows/install-roboto-serif-v2-once.yml
+          rm -f .github/workflows/install-roboto-serif-v2-retry.yml
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Sostituisce Roboto Serif con il file ottimizzato"
+          git push origin HEAD:main
+
+      - name: Verify production asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 60); do
+            html=$(curl -fsSL "https://www.giancarlolupi.com/seconda-opinione.html?deploy_check=$i" || true)
+            if grep -q 'roboto-serif-v2.woff2' <<<"$html" && grep -q 'styles.css?v=20260905-3' <<<"$html"; then ok=1; break; fi
+            sleep 5
+          done
+          test "$ok" -eq 1
+          curl -fsSL https://www.giancarlolupi.com/assets/fonts/roboto-serif-v2.woff2 -o /tmp/live.woff2
+          echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  /tmp/live.woff2" | sha256sum -c -
+
+      - name: Verify actual rendered fonts in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pw && cd /tmp/pw
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+          cat > /tmp/verify.cjs <<'JS'
+          const { chromium } = require('/tmp/pw/node_modules/playwright');
+          const cases = [
+            {url:'https://www.giancarlolupi.com/seconda-opinione.html', selector:'h2', needle:'si può operare'},
+            {url:'https://www.giancarlolupi.com/approfondimenti/risonanza-mal-di-schiena.html', selector:'h2', needle:'Una RM'},
+            {url:'https://www.giancarlolupi.com/cv-pubblicazioni.html', selector:'h3', needle:'Helsinki'}
+          ];
+          (async () => {
+            const browser = await chromium.launch({headless:true});
+            for (const c of cases) {
+              const page = await browser.newPage();
+              await page.goto(c.url, {waitUntil:'networkidle'});
+              await page.evaluate(() => document.fonts.ready);
+              const client = await page.context().newCDPSession(page);
+              await client.send('DOM.enable'); await client.send('CSS.enable');
+              const {root} = await client.send('DOM.getDocument', {depth:-1});
+              const {nodeIds} = await client.send('DOM.querySelectorAll', {nodeId:root.nodeId, selector:c.selector});
+              let found = false;
+              for (const nodeId of nodeIds) {
+                const {outerHTML} = await client.send('DOM.getOuterHTML', {nodeId});
+                if (!outerHTML.includes(c.needle)) continue;
+                const {fonts} = await client.send('CSS.getPlatformFontsForNode', {nodeId});
+                const used = fonts.filter(f => f.glyphCount > 0).map(f => ({family:f.familyName,glyphs:f.glyphCount,custom:f.isCustomFont}));
+                console.log('PLATFORM_FONTS', c.needle, JSON.stringify(used));
+                if (!used.some(f => f.family === 'Roboto Serif' && f.custom)) throw new Error('Roboto Serif not used: '+c.needle);
+                if (used.some(f => f.family === 'Georgia')) throw new Error('Georgia fallback detected: '+c.needle);
+                found = true; break;
+              }
+              if (!found) throw new Error('Target not found: '+c.needle);
+              await page.close();
+            }
+            await browser.close();
+          })();
+          JS
+          node /tmp/verify.cjs

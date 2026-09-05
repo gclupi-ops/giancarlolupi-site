@@ -1,0 +1,55 @@
+name: Optimize Roboto Serif once
+
+on:
+  push:
+    paths:
+      - .github/workflows/optimize-roboto-serif-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  optimize-font:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build compact subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'fonttools[woff]>=4.55' brotli
+          mkdir -p /tmp/roboto-serif
+          curl -fL 'https://raw.githubusercontent.com/google/fonts/main/ofl/robotoserif/RobotoSerif%5BGRAD%2Copsz%2Cwdth%2Cwght%5D.ttf' -o /tmp/roboto-serif/RobotoSerif.ttf
+          fonttools varLib.instancer /tmp/roboto-serif/RobotoSerif.ttf GRAD=0 wdth=100 opsz=32 wght=400:700 --output=/tmp/roboto-serif/RobotoSerif-instanced.ttf
+          pyftsubset /tmp/roboto-serif/RobotoSerif-instanced.ttf \
+            --output-file=/tmp/roboto-serif/roboto-serif.woff2 \
+            --flavor=woff2 \
+            --unicodes='U+0000-024F,U+1E00-1EFF,U+20AC' \
+            --layout-features='*'
+          python - <<'PY'
+          from fontTools.ttLib import TTFont
+          import os, shutil
+          new='/tmp/roboto-serif/roboto-serif.woff2'
+          old='assets/fonts/roboto-serif.woff2'
+          f=TTFont(new)
+          axes={a.axisTag:(a.minValue,a.defaultValue,a.maxValue) for a in f['fvar'].axes}
+          assert set(axes)=={'wght'}, axes
+          assert axes['wght'][0] == 400 and axes['wght'][2] == 700, axes
+          print('old-bytes', os.path.getsize(old))
+          print('new-bytes', os.path.getsize(new))
+          if os.path.getsize(new) < os.path.getsize(old):
+              shutil.copy2(new, old)
+          PY
+      - name: Commit if smaller
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/optimize-roboto-serif-once.yml
+          git config user.name 'gclupi-ops'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Ottimizza il font locale Roboto Serif'
+          git push

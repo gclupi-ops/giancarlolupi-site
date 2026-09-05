@@ -74,7 +74,7 @@ jobs:
           echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
           test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
           test ! -e assets/fonts/roboto-serif.woff2
-          python3 -m pip install --quiet fonttools
+          python3 -m pip install --quiet fonttools brotli
           python3 - <<'PY'
           from pathlib import Path
           from fontTools.ttLib import TTFont

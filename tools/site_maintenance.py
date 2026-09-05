@@ -20,6 +20,7 @@ PUBLIC_HTML = [
     ROOT / "approfondimenti" / "mal-di-schiena-quando-preoccuparsi.html",
     ROOT / "approfondimenti" / "risonanza-mal-di-schiena.html",
     ROOT / "approfondimenti" / "robotica-neurochirurgia.html",
+    ROOT / "approfondimenti" / "intelligenza-artificiale-risonanza-colonna.html",
 ]
 
 FAQS = {
@@ -68,27 +69,15 @@ def add_second_opinion_to_nav(text, path):
     return text[:match.start(2)] + body + text[match.end(2):]
 
 
-def fix_reading_times(text, path):
+def enforce_new_editorial_metadata(text, path):
     if path == ROOT / "index.html":
         text = text.replace(
-            '<span>Colonna vertebrale</span><span>03 settembre 2026</span><span>4 min</span>',
-            '<span>Colonna vertebrale</span><span>03 settembre 2026</span><span>3 min</span>')
-        text = text.replace('<span>Diagnostica</span><span>3 min</span>',
-                            '<span>Diagnostica</span><span>2 min</span>')
-        text = text.replace('<span>Tecnologia</span><span>4 min</span>',
-                            '<span>Tecnologia</span><span>3 min</span>')
+            '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 min</span></div>',
+            '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>')
     elif path == ROOT / "approfondimenti.html":
-        text = text.replace('<span>8 minuti</span>', '<span>3 minuti</span>')
-        text = text.replace('<div class="archive-reading">3 min</div>',
-                            '<div class="archive-reading">2 min</div>')
-        text = text.replace('<div class="archive-reading">4 min</div>',
-                            '<div class="archive-reading">3 min</div>')
-    elif path.name == "mal-di-schiena-quando-preoccuparsi.html":
-        text = text.replace('<span>8 minuti</span>', '<span>3 minuti</span>')
-    elif path.name == "risonanza-mal-di-schiena.html":
-        text = text.replace('<span>7 minuti</span>', '<span>2 minuti</span>')
-    elif path.name == "robotica-neurochirurgia.html":
-        text = text.replace('<span>9 minuti</span>', '<span>3 minuti</span>')
+        text = text.replace(
+            '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 minuti</span></div>',
+            '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>')
     return text
 
 
@@ -167,7 +156,7 @@ def promote_qsalute_on_home(text, path):
 for path in PUBLIC_HTML:
     text = path.read_text(encoding="utf-8")
     text = add_second_opinion_to_nav(text, path)
-    text = fix_reading_times(text, path)
+    text = enforce_new_editorial_metadata(text, path)
     text = add_faq_schema(text, path)
     text = promote_qsalute_on_home(text, path)
     path.write_text(text, encoding="utf-8")

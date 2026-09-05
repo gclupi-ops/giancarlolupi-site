@@ -1,0 +1,183 @@
+name: Finalize editorial footer once
+
+on:
+  push:
+    paths:
+      - '.github/workflows/finalize-editorial-footer-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch editorial metadata and maintenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # 1) Chiude esclusivamente i due residui del nuovo articolo AI.
+          index = root / 'index.html'
+          s = index.read_text(encoding='utf-8')
+          old = '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 min</span></div>'
+          new = '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>'
+          assert s.count(old) == 1, f'index: residuo AI atteso non univoco ({s.count(old)})'
+          index.write_text(s.replace(old, new), encoding='utf-8')
+
+          archive = root / 'approfondimenti.html'
+          s = archive.read_text(encoding='utf-8')
+          old = '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 minuti</span></div>'
+          new = '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>'
+          assert s.count(old) == 1, f'archivio: residuo AI atteso non univoco ({s.count(old)})'
+          archive.write_text(s.replace(old, new), encoding='utf-8')
+
+          # 2) Aggiorna la manutenzione permanente: 16 pagine e nessuna logica
+          #    che possa reintrodurre tempi di lettura sul nuovo editoriale.
+          p = root / 'tools' / 'site_maintenance.py'
+          s = p.read_text(encoding='utf-8')
+          ai_entry = '    ROOT / "approfondimenti" / "intelligenza-artificiale-risonanza-colonna.html",\n'
+          if ai_entry not in s:
+              marker = '    ROOT / "approfondimenti" / "robotica-neurochirurgia.html",\n'
+              assert marker in s
+              s = s.replace(marker, marker + ai_entry, 1)
+
+          s, n = re.subn(
+              r'\n\ndef fix_reading_times\(text, path\):.*?\n    return text\n',
+              '', s, count=1, flags=re.S
+          )
+          assert n == 1, f'blocco fix_reading_times non trovato o non univoco ({n})'
+          s = s.replace('    text = fix_reading_times(text, path)\n', '')
+
+          # Regola stabile per il nuovo editoriale AI: categoria + data, niente durata.
+          anchor = '\ndef add_faq_schema(text, path):\n'
+          assert anchor in s
+          policy = '''\ndef enforce_new_editorial_metadata(text, path):\n    if path == ROOT / "index.html":\n        text = text.replace(\n            '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 min</span></div>',\n            '<div class="journal-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>')\n    elif path == ROOT / "approfondimenti.html":\n        text = text.replace(\n            '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span><span>9 minuti</span></div>',\n            '<div class="archive-feature-meta"><span>Diagnostica · Tecnologia</span><span>05 settembre 2026</span></div>')\n    return text\n\n'''
+          s = s.replace(anchor, policy + anchor, 1)
+          loop_anchor = '    text = add_second_opinion_to_nav(text, path)\n'
+          assert loop_anchor in s
+          s = s.replace(loop_anchor, loop_anchor + '    text = enforce_new_editorial_metadata(text, path)\n', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          python3 tools/site_maintenance.py
+          python3 tools/identity_schema.py
+
+      - name: Certify 16 of 16 footers in source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          pages = [
+              'index.html','colonna.html','neurochirurgia.html','seconda-opinione.html',
+              'medico.html','approfondimenti.html','sedi.html','privacy.html',
+              'cv-pubblicazioni.html','rassegna-stampa.html','documentazione-clinica.html','404.html',
+              'approfondimenti/intelligenza-artificiale-risonanza-colonna.html',
+              'approfondimenti/mal-di-schiena-quando-preoccuparsi.html',
+              'approfondimenti/risonanza-mal-di-schiena.html',
+              'approfondimenti/robotica-neurochirurgia.html',
+          ]
+          assert len(pages) == 16 and len(set(pages)) == 16
+          for rel in pages:
+              text = Path(rel).read_text(encoding='utf-8')
+              m = re.search(r'<footer>.*?</footer>', text, re.I | re.S)
+              assert m, f'footer assente: {rel}'
+              footer = m.group(0)
+              prefix = '../' if rel.startswith('approfondimenti/') else ''
+              cv = f'href="{prefix}cv-pubblicazioni.html"'
+              press = f'href="{prefix}rassegna-stampa.html"'
+              assert footer.count(cv) == 1, f'CV footer errato: {rel}'
+              assert footer.count(press) == 1, f'Rassegna footer errata: {rel}'
+              assert 'CV e pubblicazioni' in footer, f'etichetta CV assente: {rel}'
+              assert 'Rassegna stampa' in footer, f'etichetta rassegna assente: {rel}'
+              print('FOOTER_OK', rel)
+
+          home = Path('index.html').read_text(encoding='utf-8')
+          archive = Path('approfondimenti.html').read_text(encoding='utf-8')
+          assert '<span>05 settembre 2026</span><span>9 min</span>' not in home
+          assert '<span>05 settembre 2026</span><span>9 minuti</span>' not in archive
+
+          maint = Path('tools/site_maintenance.py').read_text(encoding='utf-8')
+          assert 'def fix_reading_times' not in maint
+          assert 'intelligenza-artificiale-risonanza-colonna.html' in maint
+          assert 'def enforce_new_editorial_metadata' in maint
+          print('SOURCE_CERTIFICATION_OK 16/16')
+          PY
+
+      - name: Commit clean changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          rm -f .github/workflows/finalize-editorial-footer-once.yml
+          git add -A
+          git commit -m "Chiude metadati editoriali e certifica i footer"
+          git push origin HEAD:main
+
+      - name: Certify production 16 of 16
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, time, urllib.request
+
+          base = 'https://www.giancarlolupi.com/'
+          pages = [
+              'index.html','colonna.html','neurochirurgia.html','seconda-opinione.html',
+              'medico.html','approfondimenti.html','sedi.html','privacy.html',
+              'cv-pubblicazioni.html','rassegna-stampa.html','documentazione-clinica.html','404.html',
+              'approfondimenti/intelligenza-artificiale-risonanza-colonna.html',
+              'approfondimenti/mal-di-schiena-quando-preoccuparsi.html',
+              'approfondimenti/risonanza-mal-di-schiena.html',
+              'approfondimenti/robotica-neurochirurgia.html',
+          ]
+
+          def get(rel, q=''):
+              req = urllib.request.Request(base + rel + q, headers={'User-Agent':'site-final-check/1.0'})
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return r.status, r.read().decode('utf-8')
+
+          # Attende il deploy che contiene la rimozione dei due residui.
+          deployed = False
+          for i in range(60):
+              try:
+                  status, home = get('index.html', f'?footer_cert={i}')
+                  status2, archive = get('approfondimenti.html', f'?footer_cert={i}')
+                  if (status == 200 and status2 == 200 and
+                      '<span>05 settembre 2026</span><span>9 min</span>' not in home and
+                      '<span>05 settembre 2026</span><span>9 minuti</span>' not in archive):
+                      deployed = True
+                      break
+              except Exception:
+                  pass
+              time.sleep(5)
+          assert deployed, 'deploy aggiornato non rilevato'
+
+          for n, rel in enumerate(pages):
+              status, text = get(rel, f'?footer_live={int(time.time())}_{n}')
+              assert status == 200, f'HTTP {status}: {rel}'
+              m = re.search(r'<footer>.*?</footer>', text, re.I | re.S)
+              assert m, f'footer live assente: {rel}'
+              footer = m.group(0)
+              prefix = '../' if rel.startswith('approfondimenti/') else ''
+              cv = f'href="{prefix}cv-pubblicazioni.html"'
+              press = f'href="{prefix}rassegna-stampa.html"'
+              assert footer.count(cv) == 1, f'CV live errato: {rel}'
+              assert footer.count(press) == 1, f'Rassegna live errata: {rel}'
+              print('LIVE_FOOTER_OK', rel)
+          print('PRODUCTION_CERTIFICATION_OK 16/16')
+          PY

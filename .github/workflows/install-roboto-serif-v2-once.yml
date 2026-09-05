@@ -22,6 +22,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cat > /tmp/chunk-sha256 <<'EOF'
+          9c4a3efacdf11df5789e68646de25bf412add6dcad2da35f740b515ba3c6d9a0  .github/font-chunks/part-00
+          9d226dbaf96e7f4914cf86b4783b8621092020d052555191eac5e75acb8e1a9d  .github/font-chunks/part-01
+          e646aa06b7dad35d50cd1094cc49ce78d2110dae6fbf4935d29a71b4f2591e42  .github/font-chunks/part-02
+          35c75360e0df220e20a0f9349e3f0884731182f60262cef46d447202220b19e2  .github/font-chunks/part-03
+          0c256745facbb8c70b3e410035448c0f402ddf40482dc7a7d50f368042f6b500  .github/font-chunks/part-04
+          5d5112b03844e1e3021327b6302a363522b2615038c7b430ecf7eba437474e0e  .github/font-chunks/part-05
+          2bdcbde6a7df4fec2416f4ccf0330c14c114aaab4385ac6ccf7446222954a911  .github/font-chunks/part-06
+          EOF
+          sha256sum -c /tmp/chunk-sha256
           mapfile -t parts < <(find .github/font-chunks -maxdepth 1 -type f -name 'part-*' -printf '%p\n' | sort -V)
           test "${#parts[@]}" -eq 7
           cat "${parts[@]}" > /tmp/font.b64

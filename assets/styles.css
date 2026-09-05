@@ -1,4 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto+Serif:opsz,wght@8..144,400;8..144,500;8..144,600&display=swap");
+@font-face{
+  font-family:"Roboto Serif";
+  src:url("/assets/fonts/roboto-serif.woff2") format("woff2");
+  font-style:normal;
+  font-weight:400 700;
+  font-display:swap;
+}
+
 :root{
   --ink:#111820;
   --deep:#0d2032;

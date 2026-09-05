@@ -1,0 +1,178 @@
+name: CSS refactor once
+
+on:
+  push:
+    branches:
+      - css-refactor-2026-09-05
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: css-refactor-2026-09-05
+      - name: Refactor typography and audit new article
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          css_path = Path('assets/styles.css')
+          css = css_path.read_text(encoding='utf-8')
+          original_len = len(css.encode('utf-8'))
+
+          # 1) Keep a single :root: retain design tokens, replace typography tokens with the final system.
+          m = re.search(r':root\{.*?\}\n', css, flags=re.S)
+          assert m, 'First :root not found'
+          root = m.group(0)
+          replacements = {
+              '--serif:Georgia,"Times New Roman",serif;': '--serif:"Roboto Serif",Georgia,"Times New Roman",serif;',
+              '--type-label:13px;': '--type-label:13px;',
+              '--type-note:15px;': '--type-note:15px;',
+              '--type-ui:16px;': '--type-ui:15px;',
+              '--type-body:18px;': '--type-body:17px;',
+              '--type-lead:21px;': '--type-lead:20px;',
+              '--type-h3:27px;': '--type-h3:24px;',
+              '--type-section:clamp(38px,3.8vw,48px);': '--type-section:24px;',
+              '--type-page:clamp(48px,5.2vw,68px);': '--type-page:clamp(30px,3.6vw,42px);',
+              '--type-home:clamp(56px,5.9vw,80px);': '--type-home:clamp(34px,4.4vw,52px);',
+          }
+          for old,new in replacements.items():
+              assert old in root, f'Missing root token: {old}'
+              root = root.replace(old,new)
+          root = root.replace('\n}', '\n  --lh-body:1.6;\n  --lh-lead:1.35;\n  --lh-display:1.1;\n}')
+          css = css[:m.start()] + root + css[m.end():]
+
+          # 2) Remove obsolete visual systems only if their classes are no longer present in HTML.
+          html = '\n'.join(p.read_text(encoding='utf-8') for p in Path('.').rglob('*.html'))
+          for cls in ('hero-trust','editorial-mast','editorial-grid','feature-story','side-story','article-grid','article-card'):
+              assert f'class="{cls}' not in html and f' {cls}' not in html, f'Legacy class still used: {cls}'
+
+          css = re.sub(r'\.hero-trust\{.*?\.hero-trust strong\{.*?\}\n', '', css, count=1, flags=re.S)
+          start = css.find('/* International editorial desk */')
+          end = css.find('/* Locations */')
+          assert start != -1 and end != -1 and end > start, 'Legacy editorial section markers not found'
+          css = css[:start] + css[end:]
+
+          # 3) Drop the two appended generations of overrides; rebuild one authoritative block.
+          marker = '/* Unified typography and reading rhythm */'
+          cut = css.find(marker)
+          assert cut != -1, 'Unified typography marker not found'
+          css = css[:cut].rstrip() + '\n\n'
+
+          # 4) Generic headings must be safe even outside wrappers.
+          css = css.replace(
+              'h1,h2,h3{margin:0;color:var(--ink)}h1,h2{font-family:var(--serif);font-weight:500;letter-spacing:-.045em;line-height:.98}h3{font-family:var(--sans);font-weight:650;line-height:1.16;letter-spacing:-.025em}\n'
+              'h1{font-size:clamp(58px,7.2vw,104px)}h2{font-size:clamp(42px,5vw,66px)}h3{font-size:24px}',
+              'h1,h2,h3{margin:0;color:var(--ink)}h1,h2{font-family:var(--serif);font-weight:500;letter-spacing:-.025em;line-height:var(--lh-display)}h3{font-family:var(--sans);font-weight:650;line-height:1.2;letter-spacing:-.025em}\n'
+              'h1{font-size:var(--type-page)}h2{font-size:var(--type-section)}h3{font-size:var(--type-h3)}'
+          )
+          assert 'clamp(58px,7.2vw,104px)' not in css, 'Unsafe naked h1 remains'
+
+          # 5) Consolidate the small fixed sizes into semantic tokens.
+          fixed_map = {
+              '10.5px':'var(--type-label)','11px':'var(--type-label)','12px':'var(--type-label)','12.5px':'var(--type-label)','13px':'var(--type-label)',
+              '14px':'var(--type-note)','15px':'var(--type-note)','15.5px':'var(--type-note)','16px':'var(--type-note)',
+              '17px':'var(--type-body)','18px':'var(--type-body)',
+              '19px':'var(--type-lead)','20px':'var(--type-lead)','21px':'var(--type-lead)','22px':'var(--type-lead)',
+              '23px':'var(--type-h3)','24px':'var(--type-h3)','25px':'var(--type-h3)','26px':'var(--type-h3)','27px':'var(--type-h3)','28px':'var(--type-h3)',
+          }
+          def font_repl(match):
+              val = match.group(1)
+              return 'font-size:' + fixed_map.get(val, val)
+          css = re.sub(r'font-size:(10\.5px|11px|12px|12\.5px|13px|14px|15px|15\.5px|16px|17px|18px|19px|20px|21px|22px|23px|24px|25px|26px|27px|28px)', font_repl, css)
+
+          # 6) Collapse line-height values into three principal tokens plus compact exceptions.
+          def lh_repl(match):
+              raw = match.group(1)
+              try: v = float(raw)
+              except ValueError: return match.group(0)
+              if v <= 1.05: out = '1'
+              elif v <= 1.15: out = 'var(--lh-display)'
+              elif v <= 1.25: out = '1.2'
+              elif v <= 1.45: out = 'var(--lh-lead)'
+              elif v <= 1.55: out = '1.45'
+              else: out = 'var(--lh-body)'
+              return 'line-height:' + out
+          css = re.sub(r'line-height:(0?\.\d+|1(?:\.\d+)?)', lh_repl, css)
+
+          # 7) One authoritative typography/contact block.
+          css += r'''
+/* Type system · 2026-09-05 */
+body{font-size:var(--type-body);line-height:var(--lh-body)}
+.brand span span,.eyebrow,.kicker,.tag,.footer-title,.breadcrumb,.story-meta,.journal-meta,.dossier-title,.archive-label,.archive-feature-meta,.archive-date,.archive-reading,.article-meta,.article-author span,.editorial-byline span,.editorial-signature span,.editorial-signature small,.booking-label,.hero-note,.voice-intro .stat-label,.voice-source,.location .details,.location .site,.meta,.journal-evidence,.contact-link,.map-link,.hero-art .label span,.footer-bottom{font-size:var(--type-label);line-height:1.45}
+footer p,footer a{font-size:var(--type-note);line-height:var(--lh-body)}
+.navlinks,.nav-cta,.btn{font-size:var(--type-label)}
+.hero h1{font-size:var(--type-home);line-height:var(--lh-display);letter-spacing:-.03em}
+.page-hero h1,.article-hero h1{font-size:var(--type-page);line-height:var(--lh-display);letter-spacing:-.025em;max-width:900px}
+h2,.section-head h2,.voice-intro h2,.cta-band h2,.copy h2,.prose h2,.journal-head h2,.archive-feature h2{font-size:var(--type-section);line-height:var(--lh-display);letter-spacing:-.02em;font-weight:500}
+h3,.card h3,.voice-card h3,.location h3,.dossier-item h3,.archive-row h3,.method-grid h3,.journal-lead h3{font-size:var(--type-h3);line-height:1.2}
+.lead,.page-hero p,.journal-deck,.article-lede,.care-statement,.section-head p,.journal-intro p,.manifesto-copy{font-size:var(--type-lead);line-height:var(--lh-lead)}
+.prose,.article-prose,.article-lede{max-width:760px}
+.prose p,.prose li,.article-prose p,.article-prose li,.copy p{font-size:var(--type-body);line-height:var(--lh-body)}
+.article-prose>p:first-child{font-size:var(--type-lead);line-height:var(--lh-body)}
+.card p,.voice-card p,.location p,.dossier-item p,.archive-row p,.method-grid p,.journal-lead p{font-size:var(--type-note);line-height:var(--lh-body)}
+.location,.location:not(:first-child){padding:30px 28px 34px}
+.location h3{font-size:var(--type-section);line-height:1.2}
+.location p{font-size:var(--type-note)}
+.location .phone.phone-cta{display:block;min-height:48px;width:100%;margin-top:18px;padding:12px 0;border:0;background:transparent;color:var(--ink);font-family:var(--serif);font-size:var(--type-lead);line-height:1.2;text-decoration:none}
+.location .phone.phone-cta:hover{border:0;background:transparent;color:var(--blue)}
+.phone-cta span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.phone-cta strong{font-family:var(--serif);font-size:var(--type-lead);font-weight:500;line-height:1.2}
+.quote{font-size:clamp(28px,2.8vw,36px);line-height:var(--lh-display)}
+@media(max-width:760px){
+  .hero h1{font-size:34px}
+  .page-hero h1,.article-hero h1{font-size:30px}
+  h2,.section-head h2,.voice-intro h2,.cta-band h2,.copy h2,.prose h2,.journal-head h2,.archive-feature h2{font-size:22px}
+  h3,.card h3,.voice-card h3,.location h3,.dossier-item h3,.archive-row h3,.method-grid h3,.journal-lead h3{font-size:22px}
+  .location,.location:not(:first-child){padding:24px 0}
+}
+'''
+
+          # 8) Fourth article: normalize author markup; no floating editorial box is allowed.
+          ai = Path('approfondimenti/intelligenza-artificiale-risonanza-colonna.html')
+          s = ai.read_text(encoding='utf-8')
+          assert 'Linea editoriale' not in s and 'journal-principles' not in s, 'Floating editorial block found in AI article'
+          s = s.replace('<div class="article-author"><strong>Giancarlo Lupi, MD PhD – Neurochirurgo</strong></div>', '<div class="article-author"><strong>Giancarlo Lupi, MD PhD</strong><span>Neurochirurgo</span></div>')
+          ai.write_text(s, encoding='utf-8')
+
+          # 9) Cache bust on every HTML page so the refactor is immediately visible.
+          html_files = list(Path('.').glob('*.html')) + list(Path('approfondimenti').glob('*.html'))
+          for p in html_files:
+              s = p.read_text(encoding='utf-8')
+              s2 = re.sub(r'assets/styles\.css\?v=[0-9-]+', 'assets/styles.css?v=20260905-1', s)
+              s2 = re.sub(r'\.\./assets/styles\.css\?v=[0-9-]+', '../assets/styles.css?v=20260905-1', s2)
+              p.write_text(s2, encoding='utf-8')
+
+          css_path.write_text(css, encoding='utf-8')
+
+          # 10) Static checks.
+          assert css.count(':root{') == 1, f'Expected one :root, found {css.count(":root{")}'
+          assert '!important' not in css
+          assert css.count('.phone-cta strong{') == 1, 'phone-cta strong duplicated'
+          assert css.count('.location .phone.phone-cta{') == 1, 'phone-cta duplicated'
+          assert 'Unified typography and reading rhythm' not in css
+          assert 'Clinical typography refinement' not in css
+          assert '--lh-body:1.6' in css and '--lh-lead:1.35' in css and '--lh-display:1.1' in css
+
+          sizes = sorted(set(re.findall(r'font-size:([^;}]+)', css)))
+          lhs = sorted(set(re.findall(r'line-height:([^;}]+)', css)))
+          new_len = len(css.encode('utf-8'))
+          print('CSS bytes:', original_len, '->', new_len)
+          print('Distinct font-size expressions:', len(sizes), sizes)
+          print('Distinct line-height expressions:', len(lhs), lhs)
+          print('HTML pages checked:', len(html_files))
+          print('AI article author normalized:', '<span>Neurochirurgo</span>' in s)
+          PY
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/css-refactor-once.yml
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add assets/styles.css approfondimenti/intelligenza-artificiale-risonanza-colonna.html '*.html' approfondimenti/*.html .github/workflows/css-refactor-once.yml
+          git commit -m "Consolida il sistema tipografico CSS"
+          git push origin HEAD:css-refactor-2026-09-05

@@ -1,9 +1,10 @@
 name: Install Roboto Serif v2 once
 
 on:
+  workflow_dispatch:
   push:
     paths:
-      - '.github/font-chunks/part-04'
+      - '.github/font-chunks/READY'
 
 permissions:
   contents: write
@@ -17,89 +18,131 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build font and update references
+      - name: Rebuild exact font and update references
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/font-chunks/part-0* > /tmp/font.b64
-          base64 -d /tmp/font.b64 > assets/fonts/roboto-serif-v2.woff2
-          echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
-          test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
+
+          for p in 00 01 02 03 04 05; do
+            test -f ".github/font-chunks/part-$p"
+          done
+
+          cat \
+            .github/font-chunks/part-00 \
+            .github/font-chunks/part-01 \
+            .github/font-chunks/part-02 \
+            .github/font-chunks/part-03 \
+            .github/font-chunks/part-04 \
+            .github/font-chunks/part-05 \
+            > /tmp/font.b64
+
+          test "$(wc -c < /tmp/font.b64)" -eq 86856
+          base64 -d /tmp/font.b64 > /tmp/roboto-serif-v2.woff2
+          echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  /tmp/roboto-serif-v2.woff2" | sha256sum -c -
+          test "$(wc -c < /tmp/roboto-serif-v2.woff2)" -eq 65140
+          test "$(head -c 4 /tmp/roboto-serif-v2.woff2)" = "wOF2"
+
+          cp /tmp/roboto-serif-v2.woff2 assets/fonts/roboto-serif-v2.woff2
           rm -f assets/fonts/roboto-serif.woff2
 
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          old_font = '/assets/fonts/roboto-serif.woff2'
-          new_font = '/assets/fonts/roboto-serif-v2.woff2'
+          old = '/assets/fonts/roboto-serif.woff2'
+          new = '/assets/fonts/roboto-serif-v2.woff2'
 
           css = Path('assets/styles.css')
           s = css.read_text(encoding='utf-8')
-          assert s.count(old_font) == 1, s.count(old_font)
-          css.write_text(s.replace(old_font, new_font), encoding='utf-8')
+          assert s.count(old) == 1, s.count(old)
+          css.write_text(s.replace(old, new), encoding='utf-8')
 
           pages = sorted(Path('.').glob('*.html')) + sorted(Path('approfondimenti').glob('*.html'))
           assert len(pages) == 16, len(pages)
           for p in pages:
               t = p.read_text(encoding='utf-8')
-              assert t.count(old_font) == 1, (p, t.count(old_font))
-              t = t.replace(old_font, new_font)
+              assert t.count(old) == 1, (p, t.count(old))
+              t = t.replace(old, new)
               t, n = re.subn(r'(styles\.css\?v=)[0-9-]+', r'\g<1>20260905-3', t, count=1)
               assert n == 1, (p, n)
               p.write_text(t, encoding='utf-8')
           print(f'Updated {len(pages)} HTML pages')
           PY
 
-      - name: Verify source tree
+      - name: Verify source tree and glyph coverage
         shell: bash
         run: |
           set -euo pipefail
           test -f assets/fonts/roboto-serif-v2.woff2
           test ! -e assets/fonts/roboto-serif.woff2
-          test "$(grep -RIl --include='*.html' '/assets/fonts/roboto-serif-v2.woff2' . | wc -l)" -eq 16
-          test "$(grep -RIl --include='*.html' 'styles.css?v=20260905-3' . | wc -l)" -eq 16
-          ! grep -R --line-number --exclude='roboto-serif-v2.woff2' 'roboto-serif.woff2' .
-          pip install --quiet fonttools
+          echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
+          test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
+
           python3 - <<'PY'
+          from pathlib import Path
           from fontTools.ttLib import TTFont
+          import subprocess, sys
+
+          try:
+              import fontTools
+          except ImportError:
+              subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', 'fonttools'])
+              from fontTools.ttLib import TTFont
+
+          old = '/assets/fonts/roboto-serif.woff2'
+          new = '/assets/fonts/roboto-serif-v2.woff2'
+          css = Path('assets/styles.css').read_text(encoding='utf-8')
+          assert css.count(new) == 1
+          assert old not in css
+
+          pages = sorted(Path('.').glob('*.html')) + sorted(Path('approfondimenti').glob('*.html'))
+          assert len(pages) == 16
+          for p in pages:
+              t = p.read_text(encoding='utf-8')
+              assert t.count(new) == 1, p
+              assert old not in t, p
+              assert t.count('styles.css?v=20260905-3') == 1, p
+
           f = TTFont('assets/fonts/roboto-serif-v2.woff2')
           cmap = set()
           for table in f['cmap'].tables:
               cmap.update(table.cmap.keys())
-          needed = {0x2013, 0x2014, 0x2018, 0x201C, 0x201D}
+          needed = {0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D}
           missing = needed - cmap
           assert not missing, sorted(missing)
-          print('Required punctuation glyphs present')
+          print('16 preload OK; punctuation glyphs present')
           PY
 
-      - name: Commit and push
+      - name: Commit clean final tree
         shell: bash
         run: |
           set -euo pipefail
           rm -rf .github/font-chunks
           rm -f .github/workflows/install-roboto-serif-v2-once.yml
+          rm -f .github/workflows/install-roboto-serif-v2-retry.yml
           git config user.name "gclupi-ops"
           git config user.email "actions@users.noreply.github.com"
           git add -A
           git commit -m "Sostituisce Roboto Serif con il file ottimizzato"
           git push origin HEAD:main
 
-      - name: Wait for production deploy
+      - name: Verify production asset
         shell: bash
         run: |
           set -euo pipefail
+          ok=0
           for i in $(seq 1 60); do
             html=$(curl -fsSL "https://www.giancarlolupi.com/seconda-opinione.html?deploy_check=$i" || true)
             if grep -q 'roboto-serif-v2.woff2' <<<"$html" && grep -q 'styles.css?v=20260905-3' <<<"$html"; then
+              ok=1
               break
             fi
             sleep 5
           done
-          grep -q 'roboto-serif-v2.woff2' <<<"$html"
-          grep -q 'styles.css?v=20260905-3' <<<"$html"
-          curl -fsSL https://www.giancarlolupi.com/assets/fonts/roboto-serif-v2.woff2 -o /tmp/live.woff2
+          test "$ok" -eq 1
+          curl -fsSL "https://www.giancarlolupi.com/assets/fonts/roboto-serif-v2.woff2?deploy_check=$(date +%s)" -o /tmp/live.woff2
           echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  /tmp/live.woff2" | sha256sum -c -
+          test "$(wc -c < /tmp/live.woff2)" -eq 65140
 
       - name: Verify actual rendered fonts in Chromium
         shell: bash
@@ -122,7 +165,7 @@ jobs:
             const browser = await chromium.launch({headless:true});
             for (const c of cases) {
               const page = await browser.newPage();
-              await page.goto(c.url, {waitUntil:'networkidle'});
+              await page.goto(c.url + '?font_check=' + Date.now(), {waitUntil:'networkidle'});
               await page.evaluate(() => document.fonts.ready);
               const client = await page.context().newCDPSession(page);
               await client.send('DOM.enable');
@@ -134,10 +177,11 @@ jobs:
                 const {outerHTML} = await client.send('DOM.getOuterHTML', {nodeId});
                 if (!outerHTML.includes(c.needle)) continue;
                 const {fonts} = await client.send('CSS.getPlatformFontsForNode', {nodeId});
-                const used = fonts.filter(f => f.glyphCount > 0).map(f => ({family:f.familyName, glyphs:f.glyphCount, custom:f.isCustomFont}));
-                console.log('PLATFORM_FONTS', c.needle, JSON.stringify(used));
-                if (!used.some(f => f.family === 'Roboto Serif' && f.custom)) throw new Error('Roboto Serif not used: ' + c.needle);
-                if (used.some(f => f.family === 'Georgia')) throw new Error('Georgia fallback detected: ' + c.needle);
+                const used = fonts.filter(f => f.glyphCount > 0);
+                console.log('PLATFORM_FONTS', c.needle, JSON.stringify(used.map(f => ({family:f.familyName,glyphs:f.glyphCount,custom:f.isCustomFont}))));
+                if (used.length !== 1 || used[0].familyName !== 'Roboto Serif' || !used[0].isCustomFont) {
+                  throw new Error('Fallback rilevato: ' + JSON.stringify(used) + ' — ' + c.needle);
+                }
                 found = true;
                 break;
               }

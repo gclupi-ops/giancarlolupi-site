@@ -18,93 +18,69 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Rebuild exact font and update references
+      - name: Verify transfer before touching site
         shell: bash
         run: |
           set -euo pipefail
-
-          for p in 00 01 02 03 04 05; do
-            test -f ".github/font-chunks/part-$p"
-          done
-
-          cat \
-            .github/font-chunks/part-00 \
-            .github/font-chunks/part-01 \
-            .github/font-chunks/part-02 \
-            .github/font-chunks/part-03 \
-            .github/font-chunks/part-04 \
-            .github/font-chunks/part-05 \
-            > /tmp/font.b64
-
+          mapfile -t parts < <(find .github/font-chunks -maxdepth 1 -type f -name 'part-*' -printf '%p\n' | sort -V)
+          test "${#parts[@]}" -eq 7
+          cat "${parts[@]}" > /tmp/font.b64
           test "$(wc -c < /tmp/font.b64)" -eq 86856
           base64 -d /tmp/font.b64 > /tmp/roboto-serif-v2.woff2
           echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  /tmp/roboto-serif-v2.woff2" | sha256sum -c -
           test "$(wc -c < /tmp/roboto-serif-v2.woff2)" -eq 65140
           test "$(head -c 4 /tmp/roboto-serif-v2.woff2)" = "wOF2"
 
+      - name: Install font and update references
+        shell: bash
+        run: |
+          set -euo pipefail
           cp /tmp/roboto-serif-v2.woff2 assets/fonts/roboto-serif-v2.woff2
           rm -f assets/fonts/roboto-serif.woff2
-
           python3 - <<'PY'
           from pathlib import Path
           import re
-
-          old = '/assets/fonts/roboto-serif.woff2'
-          new = '/assets/fonts/roboto-serif-v2.woff2'
-
-          css = Path('assets/styles.css')
-          s = css.read_text(encoding='utf-8')
-          assert s.count(old) == 1, s.count(old)
-          css.write_text(s.replace(old, new), encoding='utf-8')
-
-          pages = sorted(Path('.').glob('*.html')) + sorted(Path('approfondimenti').glob('*.html'))
-          assert len(pages) == 16, len(pages)
+          old='/assets/fonts/roboto-serif.woff2'
+          new='/assets/fonts/roboto-serif-v2.woff2'
+          css=Path('assets/styles.css')
+          s=css.read_text(encoding='utf-8')
+          assert s.count(old)==1
+          css.write_text(s.replace(old,new),encoding='utf-8')
+          pages=sorted(Path('.').glob('*.html'))+sorted(Path('approfondimenti').glob('*.html'))
+          assert len(pages)==16
           for p in pages:
-              t = p.read_text(encoding='utf-8')
-              assert t.count(old) == 1, (p, t.count(old))
-              t = t.replace(old, new)
-              t, n = re.subn(r'(styles\.css\?v=)[0-9-]+', r'\g<1>20260905-3', t, count=1)
-              assert n == 1, (p, n)
-              p.write_text(t, encoding='utf-8')
-          print(f'Updated {len(pages)} HTML pages')
+              t=p.read_text(encoding='utf-8')
+              assert t.count(old)==1,(p,t.count(old))
+              t=t.replace(old,new)
+              t,n=re.subn(r'(styles\.css\?v=)[0-9-]+',r'\g<1>20260905-3',t,count=1)
+              assert n==1,(p,n)
+              p.write_text(t,encoding='utf-8')
           PY
 
       - name: Verify source tree and glyph coverage
         shell: bash
         run: |
           set -euo pipefail
-          test -f assets/fonts/roboto-serif-v2.woff2
-          test ! -e assets/fonts/roboto-serif.woff2
           echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
           test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
-
+          test ! -e assets/fonts/roboto-serif.woff2
           python3 -m pip install --quiet fonttools
           python3 - <<'PY'
           from pathlib import Path
           from fontTools.ttLib import TTFont
-
-          old = '/assets/fonts/roboto-serif.woff2'
-          new = '/assets/fonts/roboto-serif-v2.woff2'
-          css = Path('assets/styles.css').read_text(encoding='utf-8')
-          assert css.count(new) == 1
-          assert old not in css
-
-          pages = sorted(Path('.').glob('*.html')) + sorted(Path('approfondimenti').glob('*.html'))
-          assert len(pages) == 16
+          old='/assets/fonts/roboto-serif.woff2'; new='/assets/fonts/roboto-serif-v2.woff2'
+          css=Path('assets/styles.css').read_text(encoding='utf-8')
+          assert css.count(new)==1 and old not in css
+          pages=sorted(Path('.').glob('*.html'))+sorted(Path('approfondimenti').glob('*.html'))
+          assert len(pages)==16
           for p in pages:
-              t = p.read_text(encoding='utf-8')
-              assert t.count(new) == 1, p
-              assert old not in t, p
-              assert t.count('styles.css?v=20260905-3') == 1, p
-
-          f = TTFont('assets/fonts/roboto-serif-v2.woff2')
-          cmap = set()
-          for table in f['cmap'].tables:
-              cmap.update(table.cmap.keys())
-          needed = {0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D}
-          missing = needed - cmap
-          assert not missing, sorted(missing)
-          print('16 preload OK; punctuation glyphs present')
+              t=p.read_text(encoding='utf-8')
+              assert t.count(new)==1 and old not in t and t.count('styles.css?v=20260905-3')==1,p
+          f=TTFont('assets/fonts/roboto-serif-v2.woff2')
+          cmap=set().union(*(set(t.cmap) for t in f['cmap'].tables))
+          needed={0x2013,0x2014,0x2018,0x2019,0x201C,0x201D}
+          assert not (needed-cmap),sorted(needed-cmap)
+          print('source checks OK')
           PY
 
       - name: Commit clean final tree
@@ -127,10 +103,7 @@ jobs:
           ok=0
           for i in $(seq 1 60); do
             html=$(curl -fsSL "https://www.giancarlolupi.com/seconda-opinione.html?deploy_check=$i" || true)
-            if grep -q 'roboto-serif-v2.woff2' <<<"$html" && grep -q 'styles.css?v=20260905-3' <<<"$html"; then
-              ok=1
-              break
-            fi
+            if grep -q 'roboto-serif-v2.woff2' <<<"$html" && grep -q 'styles.css?v=20260905-3' <<<"$html"; then ok=1; break; fi
             sleep 5
           done
           test "$ok" -eq 1
@@ -148,38 +121,32 @@ jobs:
           npx playwright install --with-deps chromium >/dev/null 2>&1
           cat > /tmp/verify.cjs <<'JS'
           const { chromium } = require('/tmp/pw/node_modules/playwright');
-
-          const cases = [
-            {url:'https://www.giancarlolupi.com/seconda-opinione.html', selector:'h2', needle:'si può operare'},
-            {url:'https://www.giancarlolupi.com/approfondimenti/risonanza-mal-di-schiena.html', selector:'h2', needle:'Una RM'},
-            {url:'https://www.giancarlolupi.com/cv-pubblicazioni.html', selector:'h3', needle:'Helsinki'}
+          const cases=[
+            {url:'https://www.giancarlolupi.com/seconda-opinione.html',selector:'h2',needle:'si può operare'},
+            {url:'https://www.giancarlolupi.com/approfondimenti/risonanza-mal-di-schiena.html',selector:'h2',needle:'Una RM'},
+            {url:'https://www.giancarlolupi.com/cv-pubblicazioni.html',selector:'h3',needle:'Helsinki'}
           ];
-
-          (async () => {
-            const browser = await chromium.launch({headless:true});
-            for (const c of cases) {
-              const page = await browser.newPage();
-              await page.goto(c.url + '?font_check=' + Date.now(), {waitUntil:'networkidle'});
-              await page.evaluate(() => document.fonts.ready);
-              const client = await page.context().newCDPSession(page);
-              await client.send('DOM.enable');
-              await client.send('CSS.enable');
-              const {root} = await client.send('DOM.getDocument', {depth:-1});
-              const {nodeIds} = await client.send('DOM.querySelectorAll', {nodeId:root.nodeId, selector:c.selector});
-              let found = false;
-              for (const nodeId of nodeIds) {
-                const {outerHTML} = await client.send('DOM.getOuterHTML', {nodeId});
-                if (!outerHTML.includes(c.needle)) continue;
-                const {fonts} = await client.send('CSS.getPlatformFontsForNode', {nodeId});
-                const used = fonts.filter(f => f.glyphCount > 0);
-                console.log('PLATFORM_FONTS', c.needle, JSON.stringify(used.map(f => ({family:f.familyName,glyphs:f.glyphCount,custom:f.isCustomFont}))));
-                if (used.length !== 1 || used[0].familyName !== 'Roboto Serif' || !used[0].isCustomFont) {
-                  throw new Error('Fallback rilevato: ' + JSON.stringify(used) + ' — ' + c.needle);
-                }
-                found = true;
-                break;
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const c of cases){
+              const page=await browser.newPage();
+              await page.goto(c.url+'?font_check='+Date.now(),{waitUntil:'networkidle'});
+              await page.evaluate(()=>document.fonts.ready);
+              const client=await page.context().newCDPSession(page);
+              await client.send('DOM.enable'); await client.send('CSS.enable');
+              const {root}=await client.send('DOM.getDocument',{depth:-1});
+              const {nodeIds}=await client.send('DOM.querySelectorAll',{nodeId:root.nodeId,selector:c.selector});
+              let found=false;
+              for(const nodeId of nodeIds){
+                const {outerHTML}=await client.send('DOM.getOuterHTML',{nodeId});
+                if(!outerHTML.includes(c.needle)) continue;
+                const {fonts}=await client.send('CSS.getPlatformFontsForNode',{nodeId});
+                const used=fonts.filter(f=>f.glyphCount>0);
+                console.log('PLATFORM_FONTS',c.needle,JSON.stringify(used.map(f=>({family:f.familyName,glyphs:f.glyphCount,custom:f.isCustomFont}))));
+                if(used.length!==1||used[0].familyName!=='Roboto Serif'||!used[0].isCustomFont) throw new Error('Fallback rilevato: '+JSON.stringify(used)+' — '+c.needle);
+                found=true; break;
               }
-              if (!found) throw new Error('Target not found: ' + c.needle);
+              if(!found) throw new Error('Target not found: '+c.needle);
               await page.close();
             }
             await browser.close();

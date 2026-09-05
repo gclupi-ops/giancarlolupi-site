@@ -78,16 +78,10 @@ jobs:
           echo "5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef  assets/fonts/roboto-serif-v2.woff2" | sha256sum -c -
           test "$(wc -c < assets/fonts/roboto-serif-v2.woff2)" -eq 65140
 
+          python3 -m pip install --quiet fonttools
           python3 - <<'PY'
           from pathlib import Path
           from fontTools.ttLib import TTFont
-          import subprocess, sys
-
-          try:
-              import fontTools
-          except ImportError:
-              subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--quiet', 'fonttools'])
-              from fontTools.ttLib import TTFont
 
           old = '/assets/fonts/roboto-serif.woff2'
           new = '/assets/fonts/roboto-serif-v2.woff2'

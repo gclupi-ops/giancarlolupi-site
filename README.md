@@ -31,4 +31,6 @@ Solo dopo la verifica dell'anteprima:
 - `robots.txt` e `sitemap.xml` — SEO di base
 
 ## Aggiornamenti editoriali
+
+- Negli editoriali non mostrare tempi di lettura stimati (es. “9 minuti”): nella testata mantenere categoria e data.
 Le pillole settimanali sono predisposte per aggiornare la Home e la sezione Approfondimenti mantenendo fonti scientifiche, tono divulgativo e call to action clinicamente appropriate.

@@ -1,0 +1,86 @@
+name: Self host Roboto Serif once
+
+on:
+  push:
+    branches:
+      - self-host-roboto-serif-2026-09-05
+
+permissions:
+  contents: write
+
+jobs:
+  self-host-font:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: self-host-roboto-serif-2026-09-05
+
+      - name: Rebuild and install local font
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, re, shutil
+
+          parts = sorted(Path('.fontparts').glob('part*'))
+          assert len(parts) == 13, len(parts)
+          expected_sizes = [7000] * 12 + [2856]
+          actual_sizes = [len(p.read_text(encoding='utf-8').strip()) for p in parts]
+          assert actual_sizes == expected_sizes, actual_sizes
+          b64 = ''.join(p.read_text(encoding='utf-8').strip() for p in parts)
+          data = base64.b64decode(b64, validate=True)
+          assert len(data) == 65140, len(data)
+          assert hashlib.sha256(data).hexdigest() == '5a184301787a54723d651cf8c13134bd6e811d8adfd2e4428416186bd59d2bef'
+
+          font = Path('assets/fonts/roboto-serif.woff2')
+          font.parent.mkdir(parents=True, exist_ok=True)
+          font.write_bytes(data)
+          shutil.rmtree('.fontparts')
+
+          license_file = Path('assets/fonts/OFL.txt')
+          assert license_file.exists()
+          assert 'SIL OPEN FONT LICENSE Version 1.1' in license_file.read_text(encoding='utf-8')
+
+          css_path = Path('assets/styles.css')
+          css = css_path.read_text(encoding='utf-8')
+          remote = '@import url("https://fonts.googleapis.com/css2?family=Roboto+Serif:opsz,wght@8..144,400;8..144,500;8..144,600&display=swap");\n'
+          assert remote in css, 'Remote Google Fonts import not found'
+          face = '''@font-face{\n  font-family:"Roboto Serif";\n  src:url("/assets/fonts/roboto-serif.woff2") format("woff2");\n  font-style:normal;\n  font-weight:400 700;\n  font-display:swap;\n}\n'''
+          css = css.replace(remote, face, 1)
+          assert 'fonts.googleapis.com' not in css and 'fonts.gstatic.com' not in css
+          assert css.count('@font-face{') == 1
+          assert css.count(':root{') == 1
+          assert '--serif:"Roboto Serif",Georgia,"Times New Roman",serif;' in css
+          css_path.write_text(css, encoding='utf-8')
+
+          html_files = sorted(list(Path('.').glob('*.html')) + list(Path('approfondimenti').glob('*.html')))
+          assert len(html_files) == 16, len(html_files)
+          preload = '<link rel="preload" href="/assets/fonts/roboto-serif.woff2" as="font" type="font/woff2" crossorigin>'
+          for p in html_files:
+              s = p.read_text(encoding='utf-8')
+              assert preload not in s, f'Preload already present in {p}'
+              m = re.search(r'<link rel="stylesheet" href="(?:\.\./)?assets/styles\.css\?v=[0-9-]+">', s)
+              assert m, f'Stylesheet link not found in {p}'
+              s = s[:m.start()] + preload + '\n' + s[m.start():]
+              s = re.sub(r'((?:\.\./)?assets/styles\.css\?v=)[0-9-]+', r'\g<1>20260905-2', s)
+              assert s.count(preload) == 1
+              p.write_text(s, encoding='utf-8')
+
+          all_html = '\n'.join(p.read_text(encoding='utf-8') for p in html_files)
+          assert all_html.count(preload) == 16
+          assert 'fonts.googleapis.com' not in all_html and 'fonts.gstatic.com' not in all_html
+          assert all('styles.css?v=20260905-2' in p.read_text(encoding='utf-8') for p in html_files)
+          print('Font bytes:', len(data))
+          print('Font sha256:', hashlib.sha256(data).hexdigest())
+          print('HTML pages with preload:', all_html.count(preload))
+          print('Remote font references: 0')
+          PY
+
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/self-host-roboto-serif-once.yml
+          git config user.name "gclupi-ops"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Ospita Roboto Serif localmente"
+          git push origin HEAD:self-host-roboto-serif-2026-09-05

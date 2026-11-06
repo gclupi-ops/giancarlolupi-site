@@ -72,3 +72,17 @@ Ricerca clinica da aggiornare alla redazione: [RCT su ACDF strumentata a uno/due
 Per ogni data preparare una nuova pagina soltanto se il dubbio non è già risolto; il 25 dicembre aggiornare l'URL esistente. Aggiornare Home, archivio e sitemap coerentemente, con una sola voce per URL. Mantenere la data reale di prima pubblicazione; usare dateModified per integrazioni sostanziali e indicare visibilmente che cosa è stato aggiornato. L'uscita editoriale arretrata non retrodata la pubblicazione.
 
 Creare un commit coerente su main e verificare produzione Netlify (site ID 76071065-2f40-4cb4-8690-a8ab6b9f6cdd), stato ready e commit pertinente. Non dichiarare pubblicato sulla sola presenza dei file GitHub. Monitor: non richiedere tre proposte per il calendario approvato; segnalare il punto preciso mancante o fallito e la versione online; non generare allarme se il lavoro è in corso. Non modificare DNS, dominio o convenzioni.
+
+
+## Scheda di ricerca e pubblicazione del 6 novembre
+
+- **Domanda:** dopo chirurgia cervicale, per quanto tempo va tenuto il collare, anche di notte, e come si decide quando sospenderlo?
+- **Riscontri pubblici:** quesito MioDottore su durata e notte; consulto Medicitalia sulla sospensione dopo discectomia. Le risposte online non sono state usate come prova clinica.
+- **URL esistenti pertinenti:** `ernia-cervicale-fusione-protesi-foraminotomia.html` conteneva soltanto il richiamo a un calendario individuale; `disfagia-dopo-chirurgia-cervicale.html` e `mielopatia-cervicale-quando-operare.html` trattavano problemi diversi.
+- **Risposta già data:** uso del collare dipendente da procedura, estensione, decorso e indicazioni del chirurgo; nessuna spiegazione di collare morbido/rigido, notte, cura della pelle o sospensione.
+- **Elemento aggiuntivo:** finalità del dispositivo, evidenza dopo ACDF selezionata e laminoplastica, limiti dell'estrapolazione a trauma/instabilità, gestione pratica e criteri di sospensione concordata.
+- **Modalità:** nuova pagina `approfondimenti/collare-dopo-chirurgia-cervicale.html`, con collegamento reciproco dalla guida sulle opzioni chirurgiche.
+- **Fonti cliniche principali:** PMID 29456914, 38454504, 39283966, 27879567, 30113664, 35333123; documento istituzionale CUH per cura del collare rigido.
+- **Limiti:** campioni piccoli, procedure e dispositivi eterogenei, pochi trial; prove su ACDF degenerativa a uno/due livelli non applicabili a fratture, instabilità o ricostruzioni complesse. Il full text della meta-analisi 2024 è stato consultato; per alcune fonti è stato verificato l'abstract PubMed.
+- **QSalute:** 141 testimonianze, dato verificato il 6 novembre 2026; invariato rispetto alla Home, quindi nessuna modifica.
+- **Data editoriale e prima pubblicazione:** 6 novembre 2026.

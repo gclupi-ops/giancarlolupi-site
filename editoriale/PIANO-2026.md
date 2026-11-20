@@ -115,4 +115,4 @@ Creare un commit coerente su main e verificare produzione Netlify (site ID 76071
 - **Limiti:** studi diagnostici con campioni chirurgicamente selezionati, criteri radiologici non uniformi e rischio di bias; la revisione 2026 è narrativa. I risultati sulle revisioni derivano da coorti retrospettive e selezionate e non garantiscono outcome individuali. Le fonti ACR e review 2025/2026 sono state consultate integralmente online; per meta-analisi e coorti è stato verificato il testo/abstract disponibile, non ogni full text quando non accessibile.
 - **QSalute:** 141 testimonianze, verificato il 20 novembre 2026; invariato. La Home mantiene il numero e aggiorna la data di verifica.
 - **Data editoriale e prima pubblicazione:** 20 novembre 2026.
-- **Commit/deploy:** in attesa della verifica conclusiva in produzione.
+- **Pubblicazione:** commit `24df668106531b6293a7718044448b2fa32e401c`; deploy Netlify `6afff576dd280e37abe0de10` `ready` in production. Correzione successiva di markup HTML e lastmod sitemap inclusa nel commit finale; verifica deploy conclusiva in corso.

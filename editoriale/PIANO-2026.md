@@ -132,3 +132,4 @@ Creare un commit coerente su main e verificare produzione Netlify (site ID 76071
 - **QSalute:** 141 testimonianze, numero pubblico verificato il 27 novembre 2026; invariato rispetto alla rilevazione precedente. Nessuna modifica al dato o alla data in Home.
 - **Data editoriale e prima pubblicazione effettiva:** 27 novembre 2026.
 - **File aggiornati:** nuova pagina, Home, archivio, sitemap, `colonna.html`, guida su infiltrazioni, guida su ernia lombare primaria e questo registro.
+- **Controllo archivio:** la nuova guida compare una sola volta come articolo in evidenza; non è stata duplicata nella lista cronologica. La Home mostra abstract e fonti; il conteggio QSalute resta invariato.
